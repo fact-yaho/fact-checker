@@ -1,4 +1,4 @@
-package com.yaho.factchecker.domain.factcheck.dto.response;
+package com.yaho.factchecker.domain.claim.dto.response;
 
 import com.yaho.factchecker.global.type.ClaimCategory;
 import java.util.UUID;

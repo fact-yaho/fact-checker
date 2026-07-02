@@ -1,9 +1,10 @@
-package com.yaho.factchecker.domain.factcheck.dto.command;
+package com.yaho.factchecker.domain.claim.dto.response;
 
 import java.util.List;
 import java.util.UUID;
 
-public record ClaimCreateCommand(
+public record ClaimResponse(
+        UUID claimId,
         UUID factCheckId,
         UUID claimAnalysisAiLogId,
         String originalText,
@@ -11,6 +12,6 @@ public record ClaimCreateCommand(
         String timeScope,
         boolean verifiable,
         String unverifiableReason,
-        List<ClaimCategoryCreateCommand> categories
+        List<ClaimCategoryResponse> categories
 ) {
 }

@@ -1,4 +1,4 @@
-package com.yaho.factchecker.domain.factcheck.dto.command;
+package com.yaho.factchecker.domain.claim.dto.command;
 
 import com.yaho.factchecker.global.type.ClaimCategory;
 
