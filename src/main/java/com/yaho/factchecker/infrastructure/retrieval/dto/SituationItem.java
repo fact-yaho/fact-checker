@@ -1,0 +1,16 @@
+package com.yaho.factchecker.infrastructure.retrieval.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record SituationItem(
+        @JsonProperty("country_nm") String countryNm,
+        @JsonProperty("country_eng_nm") String countryEngNm,
+        @JsonProperty("country_iso_alp2") String countryIsoAlp2,
+        // 정세 내용
+        @JsonProperty("situation_info_cn") String situationInfoCn,
+        @JsonProperty("year") Integer year,
+        @JsonProperty("month") Integer month,
+        @JsonProperty("day") Integer day
+) {}
