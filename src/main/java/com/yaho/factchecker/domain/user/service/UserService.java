@@ -9,6 +9,7 @@ import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -29,6 +30,12 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate;
+
+    @Value("${keycloak.auth-server-url}")
+    private String keycloakAuthServerUrl;
+
+    @Value("${keycloak.client-id}")
+    private String keycloakClientId;
 
     /* 1. 회원가입 로직 */
     @Transactional
@@ -76,9 +83,6 @@ public class UserService {
     /* 5. 로그인 로직 */
     public  LoginResponse login(LoginRequest request) {
 
-        System.out.println("====== 서비스로 넘어온 이메일: " + request.getEmail());
-        System.out.println("====== 서비스로 넘어온 패스워드: " + request.getPassword());
-
         // 이메일로 유저 조회
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("User not found with email: 이메일을 찾을수 없습니다 " + request.getEmail()));
@@ -87,9 +91,8 @@ public class UserService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Invalid password: 비밀번호가 일치하지 않습니다");
         }
-
-        //  키클록 토큰 발급 엔드포인트 세팅 (테스트용 하드코딩)
-        String keycloakTokenUrl = "http://localhost:8081/realms/factchecker/protocol/openid-connect/token";
+    //  주입받은 환경변수를 활용하여 엔드포인트 설정
+        String keycloakTokenUrl = keycloakAuthServerUrl + "/realms/factchecker/protocol/openid-connect/token";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
@@ -102,11 +105,11 @@ public class UserService {
         HttpEntity<MultiValueMap<String, String>> httpEntity = new HttpEntity<>(formData, headers);
 
         try {
-            // 5. Keycloak 서버로 요청을 보내 토큰 응답 받기
-            ResponseEntity<Map> response = restTemplate.postForEntity(keycloakTokenUrl, httpEntity, Map.class);
+            // Keycloak 서버로 요청을 보내 토큰 응답 받기
+            ResponseEntity<Map> response = restTemplate.postForEntity(keycloakAuthServerUrl + "/protocol/openid-connect/token", httpEntity, Map.class);
             Map<String, Object> responseBody = response.getBody();
 
-            // 6. 정상적으로 받아온 토큰 데이터를 Response DTO에 맵핑하여 반환
+            //  정상적으로 받아온 토큰 데이터를 Response DTO에 맵핑하여 반환
             return new LoginResponse(
                     (String) responseBody.get("access_token"),
                     (String) responseBody.get("refresh_token"),

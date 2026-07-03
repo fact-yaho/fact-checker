@@ -1,20 +1,20 @@
 package com.yaho.factchecker.domain.user.service;
 
+import com.yaho.factchecker.domain.user.entity.Role;
 import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
+import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
-import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -37,28 +37,30 @@ public class CustomOAth2UserService implements OAuth2UserService <OAuth2UserRequ
        String email = (String) attributes.get("email");
        String name = (String) attributes.get("name");
 
+
        log.info("CustomOAth2UserService loadUser 호출");
 
        User user = saveOrUpate(email, name);
 
-       return  new DefaultOAuth2User(
-               Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")),
-               attributes,
-               userName
-       );
+
+       //PrincipalDetails 객체에 엔티티와 속성값을 묶어서 반환
+        return new PrincipalDetails(user, attributes);
     }
 
-    private User saveOrUpate(String email, String nickname){
+    private User saveOrUpate(String email, String name){
 
         return userRepository.findByEmail(email)
-                .map(entity->{
-                    return entity;
-                })
+                .map(entity->entity)
                 .orElseGet(()->{
+
+                    String shortUuid = UUID.randomUUID().toString().toString().substring(0, 8); // 8자리 UUID 생성
+                    String uniqueNickname = name + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
+
                     User newUser =User.builder()
                             .email(email)
-                            .nickname(nickname) // 구글 이름을 기본 닉네임으로 설정 예시
-                            .password("")
+                            .name(name)
+                            .nickname(uniqueNickname) // 구글 이름을 기본 닉네임으로 설정 예시
+                            .role(Role.USER) // 기본 역할 설정
                             .build();
                     return userRepository.save(newUser);
                 });
