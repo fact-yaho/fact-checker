@@ -53,7 +53,10 @@ public class CustomOAth2UserService implements OAuth2UserService <OAuth2UserRequ
                 .map(entity->entity)
                 .orElseGet(()->{
 
-                    String shortUuid = UUID.randomUUID().toString().toString().substring(0, 8); // 8자리 UUID 생성
+                    String shortUuid = UUID.randomUUID().toString().substring(0, 8); // 8자리 UUID 생성
+                    // 이름 누락시 방어 코드
+                    String safeName = (name != null && !name.isBlank()) ? name : "user";
+
                     String uniqueNickname = name + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
 
                     User newUser =User.builder()

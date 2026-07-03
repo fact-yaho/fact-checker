@@ -105,8 +105,14 @@ public class UserService {
         HttpEntity<MultiValueMap<String, String>> httpEntity = new HttpEntity<>(formData, headers);
 
         try {
-            // Keycloak 서버로 요청을 보내 토큰 응답 받기
-            ResponseEntity<Map> response = restTemplate.postForEntity(keycloakAuthServerUrl + "/protocol/openid-connect/token", httpEntity, Map.class);
+            //
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    keycloakTokenUrl,
+                    org.springframework.http.HttpMethod.POST,
+                    httpEntity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
             Map<String, Object> responseBody = response.getBody();
 
             //  정상적으로 받아온 토큰 데이터를 Response DTO에 맵핑하여 반환

@@ -5,6 +5,7 @@ import com.yaho.factchecker.domain.user.dto.request.SignUpRequest;
 import com.yaho.factchecker.domain.user.dto.response.MyPageResponse;
 import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.service.UserService;
+import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -66,11 +67,12 @@ public class UserController {
 
     //5. 마이페이지 api 추가
     @PostMapping("/me")
-    public ResponseEntity<MyPageResponse>getMyPage(@AuthenticationPrincipal UserDetails userDetails) {
-        Long userId = ((User) userDetails).getId();
-        MyPageResponse response = userService.getMyPage(userId);
 
-        return ResponseEntity.ok(response);
+    // principalDetails를 통해 현재 로그인한 사용자의 정보를 가져옵니다.15
+    public ResponseEntity<MyPageResponse>getMyPage(@AuthenticationPrincipal PrincipalDetails principalDetails) {
+        User user = principalDetails.getUser();
+
+        return ResponseEntity.ok(new MyPageResponse(user));
     }
 
 }
