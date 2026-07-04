@@ -15,16 +15,9 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
     List<DocumentFact> findAllByEvidenceDocument_EvidenceDocumentId(UUID evidenceDocumentId);
 
     /**
-     * [PER_CLAIM = fact 유사도 → 문서 MAX 집계]
-     * 특정 소주장(claimId)이 수집한 모든 문서의 fact를 입력 벡터와 비교,
-     * 문서별로 가장 높은 유사도(MAX)를 문서 점수로 반환 (전수 계산, LIMIT 없음)
-     *
-     * 전수 계산 = LIMIT 없이 모든 문서 반환 (RRF에서 BM25와 융합 후 Top-K는 service에서)
-     * MAX 집계 = GROUP BY + MAX (결정 2-A)
-     * fact → evidence_document → (claim_id 필터)
-     *
-     * claimId = 대상 소주장 id (이 소주장이 수집한 문서들로 범위 한정)
-     * queryVector = pgvector 리터럴 문자열 "[v1,v2,...]"
+     * [PER_CLAIM: fact 유사도 → 문서 MAX 집계]
+     * 특정 소주장(claimId)이 수집한 모든 문서의 fact를 입력 벡터와 비교
+     * 문서별로 가장 높은 유사도(MAX)를 문서 점수로 반환 (후보가 적어 전수 계산, LIMIT 없음)
      */
     @Query(value = """
             SELECT
@@ -44,30 +37,42 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
     );
 
     /**
-     * [CORPUS = 전체 코퍼스에서 fact 유사도 → 문서 MAX 집계 → Top-K]
-     * 소주장과 무관하게 적재된 코퍼스 문서(source_type='CORPUS') 전체의 fact를 입력 벡터와 비교,
-     * 문서별 최고 유사도(MAX)를 점수로 하여 상위 K개 문서만 반환
-     * per-claim과 달리 후보가 수만 건이므로 LIMIT 필수
-     * ORDER BY 의 fact_vector <=> 가 HNSW 인덱스(idx_document_fact_vector, 코사인)를 탐
+     * [CORPUS: 전체 코퍼스에서 벡터 검색 → 문서 Top-K]
      *
-     * queryVector = pgvector 리터럴 문자열 "[v1,v2,...]"
-     * topK = 반환할 상위 문서 수
+     * 1단계(서브쿼리): 코퍼스 fact 중 쿼리 벡터에 가장 가까운 fact 를 factLimit 개만 조회
+     *   - ORDER BY fact_vector <=> ... LIMIT 형태라 HNSW 인덱스(idx_document_fact_vector, 코사인)를 탐(ANN)
+     *   - 코퍼스 전체 fact 를 훑지 않고 근접 후보만 빠르게 확보
+     * 2단계(바깥): 좁혀진 fact 후보만 문서별 MAX 유사도로 집계 → 상위 topK 문서
+     *
+     * 근사(approximate) 특성: 한 문서의 최고 fact 가 factLimit 밖이면 누락될 수 있으므로
+     * factLimit 은 topK 대비 넉넉히(예: topK=5 → factLimit=100~200) 준다
+     *
+     * queryVector = pgvector 리터럴 "[v1,v2,...]"
+     * factLimit    = 1단계에서 좁힐 근접 fact 후보 수
+     * topK         = 최종 반환할 상위 문서 수
      */
     @Query(value = """
             SELECT
-                ed.evidence_document_id AS evidenceDocumentId,
-                MAX(1 - (df.fact_vector <=> CAST(:queryVector AS vector))) AS maxSimilarity
-            FROM document_fact df
-            JOIN evidence_document ed
-                ON df.evidence_document_id = ed.evidence_document_id
-            WHERE ed.source_type = 'CORPUS'
-              AND df.fact_vector IS NOT NULL
-            GROUP BY ed.evidence_document_id
+                top_facts.evidence_document_id AS evidenceDocumentId,
+                MAX(1 - (top_facts.fact_vector <=> CAST(:queryVector AS vector))) AS maxSimilarity
+            FROM (
+                SELECT df.evidence_document_id AS evidence_document_id,
+                       df.fact_vector AS fact_vector
+                FROM document_fact df
+                JOIN evidence_document ed
+                    ON df.evidence_document_id = ed.evidence_document_id
+                WHERE ed.source_type = 'CORPUS'
+                  AND df.fact_vector IS NOT NULL
+                ORDER BY df.fact_vector <=> CAST(:queryVector AS vector)
+                LIMIT :factLimit
+            ) AS top_facts
+            GROUP BY top_facts.evidence_document_id
             ORDER BY maxSimilarity DESC
             LIMIT :topK
             """, nativeQuery = true)
     List<DocumentVectorScoreProjection> findCorpusDocumentVectorScores(
             @Param("queryVector") String queryVector,
+            @Param("factLimit") int factLimit,
             @Param("topK") int topK
     );
 }
