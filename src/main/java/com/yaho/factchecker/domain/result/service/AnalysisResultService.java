@@ -79,6 +79,25 @@ public class AnalysisResultService {
         return savedResult.getId();
     }
 
+    @Transactional
+    public void delete(UUID analysisResultId) {
+        validateDeleteCommand(analysisResultId);
+
+        AnalysisResult analysisResult = analysisResultRepository.findById(analysisResultId)
+            .orElseThrow(() -> new IllegalArgumentException("분석 결과를 찾을 수 없습니다. id=" + analysisResultId));
+
+        List<AnalysisEvidence> evidences =
+            analysisEvidenceRepository.findAllByAnalysisResultId(analysisResultId);
+
+        analysisEvidenceRepository.deleteAll(evidences);
+
+        scoreBreakdownRepository.findByAnalysisResultId(analysisResultId)
+            .ifPresent(scoreBreakdownRepository::delete);
+
+        analysisResultRepository.delete(analysisResult);
+    }
+
+    // Helper Methods =========================================================================
     private void validateCreateCommand(CreateAnalysisResultCommand command) {
         if (command == null) {
             throw new IllegalArgumentException("분석 결과 생성 요청은 null일 수 없습니다.");
@@ -102,6 +121,12 @@ public class AnalysisResultService {
 
         if (command.evidences() == null || command.evidences().isEmpty()) {
             throw new IllegalArgumentException("분석 근거는 최소 1개 이상 필요합니다.");
+        }
+    }
+
+    private void validateDeleteCommand(UUID analysisResultId) {
+        if (analysisResultId == null) {
+            throw new IllegalArgumentException("분석 결과 ID는 필수입니다.");
         }
     }
 }
