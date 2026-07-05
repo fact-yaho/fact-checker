@@ -53,6 +53,9 @@ dependencies {
 
     // OAuth2 리소스 서버 라이브러리 (JWT 검증용 핵심 부품)
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // API 요청으로 넘어온 문서 내용 정제용
+    implementation 'org.jsoup:jsoup:1.18.1'
 }
 
 dependencyManagement {
