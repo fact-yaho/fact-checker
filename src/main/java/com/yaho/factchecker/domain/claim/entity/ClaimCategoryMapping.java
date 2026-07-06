@@ -1,4 +1,4 @@
-package com.yaho.factchecker.domain.factcheck.entity;
+package com.yaho.factchecker.domain.claim.entity;
 
 import com.yaho.factchecker.domain.retrieval.entity.Category;
 import jakarta.persistence.Column;
