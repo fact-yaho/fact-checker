@@ -3,6 +3,9 @@ package com.yaho.factchecker.domain.user.service;
 import com.yaho.factchecker.domain.user.entity.Role;
 import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
+import com.yaho.factchecker.domain.user.service.oauth.GoogleUserInfo;
+import com.yaho.factchecker.domain.user.service.oauth.KakaoUserInfo;
+import com.yaho.factchecker.domain.user.service.oauth.OAuth2UserInfo;
 import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,9 +27,8 @@ public class CustomOAth2UserService implements OAuth2UserService <OAuth2UserRequ
     private final UserRepository userRepository;
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest)  throws OAuth2AuthenticationException {
-
-       OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
-       OAuth2User oAuth2User = delegate.loadUser(userRequest);
+        OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
+        OAuth2User oAuth2User = delegate.loadUser(userRequest);
 
        String registrationId = userRequest.getClientRegistration().getRegistrationId();
        String userName = userRequest.getClientRegistration()
@@ -34,16 +36,28 @@ public class CustomOAth2UserService implements OAuth2UserService <OAuth2UserRequ
 
        Map<String,Object> attributes = oAuth2User.getAttributes();
 
-       String email = (String) attributes.get("email");
-       String name = (String) attributes.get("name");
+       log.info("CustomOAuth2UserService 로드 완료 - 채널: {}", registrationId);
 
 
-       log.info("CustomOAth2UserService loadUser 호출");
+        OAuth2UserInfo oAuth2UserInfo = null;
+        if("google".equals(registrationId)){
+            oAuth2UserInfo = new GoogleUserInfo(attributes);
+        } else if ("kakao".equals(registrationId)){
+            oAuth2UserInfo = new KakaoUserInfo(attributes);
+        }else {
+            throw new OAuth2AuthenticationException("지원하지 않는 소셜 로그인 채널입니다: " + registrationId);
+        }
+
+
+       String email = oAuth2UserInfo.getEmail();
+       String name =  oAuth2UserInfo.getName();
+
+       if(email == null||email.isBlank()){
+           throw new OAuth2AuthenticationException("이메일 정보를 가져올 수 없습니다. 이메일 제공 동의가 필요합니다.");
+       }
 
        User user = saveOrUpate(email, name);
 
-
-       //PrincipalDetails 객체에 엔티티와 속성값을 묶어서 반환
         return new PrincipalDetails(user, attributes);
     }
 
