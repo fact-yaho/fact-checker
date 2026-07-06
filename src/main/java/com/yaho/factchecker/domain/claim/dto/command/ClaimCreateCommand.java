@@ -13,6 +13,7 @@ public record ClaimCreateCommand(
         String timeScope,
         boolean verifiable,
         String unverifiableReason,
-        List<ClaimCategoryCreateCommand> categories
+        List<ClaimCategoryCreateCommand> categories,
+        List<ClaimCountryCreateCommand> countries
 ) {
 }
