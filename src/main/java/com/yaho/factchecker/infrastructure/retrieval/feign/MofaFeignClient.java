@@ -112,7 +112,7 @@ public interface MofaFeignClient {
             @SpringQueryMap Map<String, String> conditions
     );
 
-    // 10. 브리핑 (A부류, 검색 미지원 → 전체 페이징)
+    // 10. 브리핑 (검색 미지원 → 전체 페이징)
     @GetMapping("/briefingsService/getBriefings")
     MofaResponse<BriefingItem> getBriefings(
             @RequestParam("serviceKey") String serviceKey,
@@ -121,12 +121,38 @@ public interface MofaFeignClient {
             @RequestParam("returnType") String returnType
     );
 
-    // 11. 연설문 (A부류, 검색 미지원 → 전체 페이징)
+    // 11. 연설문 (검색 미지원 → 전체 페이징)
     @GetMapping("/speechesService/getSpeeches")
     MofaResponse<SpeechItem> getSpeeches(
             @RequestParam("serviceKey") String serviceKey,
             @RequestParam("pageNo") int pageNo,
             @RequestParam("numOfRows") int numOfRows,
             @RequestParam("returnType") String returnType
+    );
+
+    // 12. 보도자료 (검색 미지원 → 전체 페이징)
+    @GetMapping("/pressRlsService/getPressRls")
+    MofaResponse<PressReleaseItem> getPressReleases(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("pageNo") int pageNo,
+            @RequestParam("numOfRows") int numOfRows,
+            @RequestParam("returnType") String returnType
+    );
+
+    // 13. 국제경제동향 (검색 미지원 → 전체 페이징)
+    @GetMapping("/globalEconomicTrendsService/getGlobalEconomicTrends")
+    MofaResponse<GlobalEconomicTrendItem> getGlobalEconomicTrends(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("pageNo") int pageNo,
+            @RequestParam("numOfRows") int numOfRows,
+            @RequestParam("returnType") String returnType
+    );
+
+    // 14. 외교안보연구소 발간자료 (국가 조건 없어 전체 페이징)
+    @GetMapping("/IfansPblctList1/getIfansPublctList")
+    MofaResponse<IfansPublicationItem> getIfansPublications(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("pageNo") int pageNo,
+            @RequestParam("numOfRows") int numOfRows
     );
 }

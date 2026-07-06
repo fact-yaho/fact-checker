@@ -2,7 +2,6 @@ package com.yaho.factchecker.domain.retrieval.service;
 
 import com.yaho.factchecker.domain.retrieval.dto.ClaimRetrievalRequest;
 import com.yaho.factchecker.domain.retrieval.entity.EvidenceDocument;
-import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.service.collector.ApiDocumentCollector;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +15,11 @@ import java.util.UUID;
 /**
  * 근거문서 수집 오케스트레이터 (라우터)
  * 소주장 카테고리에 해당하는 수집기(ApiDocumentCollector)들만 골라 실행하고,
- * 결과를 evidence_document 에 저장한 뒤, 각 문서에서 fact 를 추출·임베딩하여 document_fact 에 저장한다.
+ * 각 문서에서 fact 를 추출·임베딩하여 저장 (문서 + document_fact 저장)
  *
- * per-claim 문서도 fact 벡터를 갖게 되어, 재정렬 시 BM25 + 벡터 양쪽 신호를 받는다.
- * (코퍼스 문서와 동일하게 DocumentFactWriter 로 처리)
+ * per-claim 문서도 fact 벡터를 갖게 되어, 재정렬 시 BM25 + 벡터 양쪽 신호를 받음
+ * (코퍼스 문서와 동일하게 DocumentFactWriter로 처리 — 문서 저장/fact 저장 트랜잭션은
+ *  DocumentFactWriter → DocumentPersister가 담당)
  */
 @Slf4j
 @Service
@@ -27,8 +27,7 @@ import java.util.UUID;
 public class DocumentCollector {
 
     private final List<ApiDocumentCollector> collectors;
-    private final EvidenceDocumentRepository evidenceDocumentRepository;
-    private final DocumentFactWriter documentFactWriter;   // ← 추가
+    private final DocumentFactWriter documentFactWriter;
 
     public void collectAndSave(ClaimRetrievalRequest request) {
         UUID claimId = request.claimId();
@@ -39,6 +38,7 @@ public class DocumentCollector {
             return;
         }
 
+        // 이 카테고리를 담당하는 수집기만 선택
         List<ApiDocumentCollector> matched = collectors.stream()
                 .filter(c -> c.supportedCategories().contains(category))
                 .toList();
@@ -48,6 +48,7 @@ public class DocumentCollector {
             return;
         }
 
+        // 매칭된 수집기들 실행 → 결과 합침 (미저장 문서 목록)
         List<EvidenceDocument> collected = new ArrayList<>();
         for (ApiDocumentCollector collector : matched) {
             collected.addAll(collector.collect(request));
@@ -58,23 +59,19 @@ public class DocumentCollector {
             return;
         }
 
-        // 문서 저장
-        List<EvidenceDocument> saved = evidenceDocumentRepository.saveAll(collected);
-        log.info("총 {}건 저장. claimId={}, category={}, 수집기={}개",
-                saved.size(), claimId, category, matched.size());
-
-        // 각 문서에서 fact 추출·임베딩·저장 (per-claim 도 벡터를 갖도록)
-        // 한 문서 실패는 로그 남기고 계속(resilient). 실패 문서는 벡터 없이 BM25 로만 참여.
+        // 각 문서에서 fact 추출·임베딩·저장 (문서 저장도 writeFacts 내부에서 수행)
+        // 한 문서 실패는 로그 남기고 계속(resilient), 실패 문서는 벡터 없이 BM25 로만 참여(또는 미저장)
         int totalFacts = 0, failed = 0;
-        for (EvidenceDocument doc : saved) {
+        for (EvidenceDocument doc : collected) {
             try {
-                totalFacts += documentFactWriter.writeFacts(doc);
+                totalFacts += documentFactWriter.writeFacts(doc).savedFactCount();
             } catch (Exception e) {
                 failed++;
                 log.error("[per-claim fact] 문서 처리 실패 (title='{}'): {}",
                         doc.getTitle(), e.getMessage(), e);
             }
         }
-        log.info("per-claim fact 저장 완료. claimId={}, fact {}개, 실패 {}건", claimId, totalFacts, failed);
+        log.info("문서 저장 + fact 완료. claimId={}, category={}, 수집기={}개, fact {}개, 실패 {}건",
+                claimId, category, matched.size(), totalFacts, failed);
     }
 }
