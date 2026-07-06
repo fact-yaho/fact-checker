@@ -14,10 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 문서 하나에서 fact 를 추출·임베딩하여 document_fact 로 저장하는 공통 컴포넌트
+ * 문서 하나에서 fact를 추출·임베딩하여 document_fact로 저장하는 공통 컴포넌트
  * 코퍼스 적재와 per-claim 수집이 공유함
  *
- * [흐름] content_cleaned → LLM fact 추출 → 배치 임베딩(fact별 개별 벡터) → document_fact 저장
+ * [흐름] content_cleaned → LLM fact 추출 → 정규화(공백·null 제거) → 배치 임베딩(fact별 개별 벡터) → document_fact 저장
  *
  * 저장할 fact가 없거나 content가 비면 아무것도 저장하지 않고 0 반환
  */
@@ -45,7 +45,13 @@ public class DocumentFactWriter {
         // [1단계] fact 추출 (LLM)
         FactExtractionResponse extracted =
                 factExtractionPort.extract(new FactExtractionRequest(content));
-        List<String> facts = (extracted.facts() != null) ? extracted.facts() : List.of();
+
+        // 정규화 = null/공백 fact 제거 + trim
+        // (LLM 응답에 빈 값이 섞이면 embedBatch가 예외를 던져 문서 저장이 중단되므로 사전에 걸러냄)
+        List<String> facts = (extracted.facts() != null ? extracted.facts() : List.<String>of()).stream()
+                .filter(f -> f != null && !f.isBlank())
+                .map(String::trim)
+                .toList();
         if (facts.isEmpty()) {
             log.info("[factWriter] 추출된 fact 없음 (title='{}')", safeTitle(document));
             return 0;

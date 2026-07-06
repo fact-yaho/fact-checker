@@ -178,15 +178,16 @@ public class RetrievalService {
     /**
      * [6단계] 재정렬 결과 저장 (기존 내역 덮어쓰기)
      * 후보 맵(perClaim+corpus)으로 docMap을 만들어 코퍼스 문서도 저장
+     * 기존 결과 삭제를 빈 리스트 검사보다 먼저 수행 (이번 결과가 0건이어도 낡은 결과가 남지 않도록)
      */
     private void saveRerankResults(UUID claimId, List<RerankRow> rows,
                                    Map<UUID, EvidenceDocument> candidateMap) {
+        // 해당 소주장의 기존 결과 삭제 (덮어쓰기)
+        rerankResultRepository.deleteByClaimId(claimId);
+
         if (rows.isEmpty()) {
             return;
         }
-
-        // 해당 소주장의 기존 결과 삭제 (덮어쓰기)
-        rerankResultRepository.deleteByClaimId(claimId);
 
         List<RerankResult> entities = new ArrayList<>(rows.size());
         for (RerankRow row : rows) {
