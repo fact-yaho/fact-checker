@@ -2,6 +2,8 @@ package com.yaho.factchecker.domain.user.entity;
 
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -9,6 +11,8 @@ import lombok.NoArgsConstructor;
 @Table(name= "p_user")
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor //
+@Builder //
 public class User {
 
     @Id
@@ -18,7 +22,7 @@ public class User {
     @Column(nullable = false, unique = true ,length = 50 ) //중복 가입방지
     private String email;
 
-    @Column(nullable = false, length = 50 )
+    @Column(nullable = false, length = 255 )
     private String password;
 
     @Column(nullable = false, length = 50 )

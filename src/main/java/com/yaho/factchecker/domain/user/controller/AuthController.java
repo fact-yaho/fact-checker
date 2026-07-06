@@ -1,15 +1,16 @@
 package com.yaho.factchecker.domain.user.controller;
 
 import com.yaho.factchecker.domain.user.dto.request.LoginRequest;
+import com.yaho.factchecker.domain.user.dto.response.LoginResponse;
 import com.yaho.factchecker.domain.user.service.UserService;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestBody;
 
-
-
+@RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
@@ -18,12 +19,14 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest request){
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request){
 
-        Long userId =userService.login(request);
+        LoginResponse response = userService.login(request);
 
-        return ResponseEntity.ok("로그인 성공" + userId);
+        return ResponseEntity.ok(response);
 
     }
+
+
 
 }
