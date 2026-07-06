@@ -111,4 +111,22 @@ public interface MofaFeignClient {
             @RequestParam("returnType") String returnType,
             @SpringQueryMap Map<String, String> conditions
     );
+
+    // 10. 브리핑 (A부류, 검색 미지원 → 전체 페이징)
+    @GetMapping("/briefingsService/getBriefings")
+    MofaResponse<BriefingItem> getBriefings(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("pageNo") int pageNo,
+            @RequestParam("numOfRows") int numOfRows,
+            @RequestParam("returnType") String returnType
+    );
+
+    // 11. 연설문 (A부류, 검색 미지원 → 전체 페이징)
+    @GetMapping("/speechesService/getSpeeches")
+    MofaResponse<SpeechItem> getSpeeches(
+            @RequestParam("serviceKey") String serviceKey,
+            @RequestParam("pageNo") int pageNo,
+            @RequestParam("numOfRows") int numOfRows,
+            @RequestParam("returnType") String returnType
+    );
 }
