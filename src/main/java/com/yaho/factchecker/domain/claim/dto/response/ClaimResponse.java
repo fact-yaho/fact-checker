@@ -12,6 +12,7 @@ public record ClaimResponse(
         String timeScope,
         boolean verifiable,
         String unverifiableReason,
-        List<ClaimCategoryResponse> categories
+        List<ClaimCategoryResponse> categories,
+        List<ClaimCountryResponse> countries
 ) {
 }

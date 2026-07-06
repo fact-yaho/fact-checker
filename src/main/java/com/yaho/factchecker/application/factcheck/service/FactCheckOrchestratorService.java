@@ -3,10 +3,12 @@ package com.yaho.factchecker.application.factcheck.service;
 import com.yaho.factchecker.application.ai.port.ClaimAnalysisPort;
 import com.yaho.factchecker.application.factcheck.dto.request.FactCheckStartRequest;
 import com.yaho.factchecker.application.factcheck.dto.response.FactCheckStartResponse;
+import com.yaho.factchecker.domain.ai.dto.common.CountryInfo;
 import com.yaho.factchecker.domain.ai.dto.common.ExtractedClaim;
 import com.yaho.factchecker.domain.ai.dto.request.ClaimAnalysisRequest;
 import com.yaho.factchecker.domain.ai.dto.response.ClaimAnalysisResponse;
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCategoryCreateCommand;
+import com.yaho.factchecker.domain.claim.dto.command.ClaimCountryCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimResponse;
 import com.yaho.factchecker.domain.claim.service.ClaimService;
@@ -14,7 +16,6 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +56,7 @@ public class FactCheckOrchestratorService {
                 .verifiable(claim.isVerifiable())
                 .unverifiableReason(claim.unverifiableReason())
                 .categories(toCategoryCommands(claim))
+                .countries(toCountryCommands(claim.countries()))
                 .build();
     }
 
@@ -65,6 +67,19 @@ public class FactCheckOrchestratorService {
                         .primaryCategory(true)
                         .build()
         );
+    }
+
+    private List<ClaimCountryCreateCommand> toCountryCommands(List<CountryInfo> countries) {
+        if (countries == null) {
+            return List.of();
+        }
+
+        return countries.stream()
+                .map(country -> ClaimCountryCreateCommand.builder()
+                        .name(country.name())
+                        .code(country.code())
+                        .build())
+                .toList();
     }
 }
 

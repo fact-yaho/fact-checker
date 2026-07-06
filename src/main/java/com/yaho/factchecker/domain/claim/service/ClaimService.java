@@ -1,11 +1,14 @@
 package com.yaho.factchecker.domain.claim.service;
 
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCategoryCreateCommand;
+import com.yaho.factchecker.domain.claim.dto.command.ClaimCountryCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimCategoryResponse;
+import com.yaho.factchecker.domain.claim.dto.response.ClaimCountryResponse;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimResponse;
 import com.yaho.factchecker.domain.claim.entity.Claim;
 import com.yaho.factchecker.domain.claim.entity.ClaimCategoryMapping;
+import com.yaho.factchecker.domain.claim.entity.ClaimCountry;
 import com.yaho.factchecker.domain.claim.repository.ClaimRepository;
 import com.yaho.factchecker.domain.retrieval.entity.Category;
 import com.yaho.factchecker.domain.retrieval.repository.CategoryRepository;
@@ -36,6 +39,17 @@ public class ClaimService {
                 .unverifiableReason(command.unverifiableReason())
                 .build();
 
+        if (command.countries() != null) {
+            for (ClaimCountryCreateCommand countryCommand : command.countries()) {
+                ClaimCountry country = ClaimCountry.builder()
+                        .name(countryCommand.name())
+                        .code(countryCommand.code())
+                        .build();
+
+                claim.addCountry(country);
+            }
+        }
+
         for (ClaimCategoryCreateCommand categoryCommand : command.categories()) {
             Category category = categoryRepository.findByCategoryName(categoryCommand.category())
                     .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
@@ -58,6 +72,13 @@ public class ClaimService {
                 .map(this::toCategoryResponse)
                 .toList();
 
+        List<ClaimCountryResponse> countries = claim.getCountries().stream()
+                .map(country -> new ClaimCountryResponse(
+                        country.getName(),
+                        country.getCode()
+                ))
+                .toList();
+
         return new ClaimResponse(
                 claim.getId(),
                 claim.getFactCheckId(),
@@ -67,7 +88,8 @@ public class ClaimService {
                 claim.getTimeScope(),
                 claim.isVerifiable(),
                 claim.getUnverifiableReason(),
-                categories
+                categories,
+                countries
         );
     }
 

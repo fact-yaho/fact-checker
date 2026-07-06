@@ -53,6 +53,9 @@ public class Claim extends BaseEntity {
     @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ClaimCategoryMapping> categories = new ArrayList<>();
 
+    @OneToMany(mappedBy = "claim", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ClaimCountry> countries = new ArrayList<>();
+
     @Builder
     private Claim(
             UUID factCheckId,
@@ -77,6 +80,11 @@ public class Claim extends BaseEntity {
     public void addCategory(ClaimCategoryMapping categoryMapping) {
         this.categories.add(categoryMapping);
         categoryMapping.assignClaim(this);
+    }
+
+    public void addCountry(ClaimCountry country) {
+        this.countries.add(country);
+        country.assignClaim(this);
     }
 
     private void validateVerifiability(boolean verifiable, String unverifiableReason) {
