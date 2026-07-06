@@ -39,9 +39,9 @@ public class AnalysisResult {
     private UUID id;
 
     /**
-     * 로그인 사용자인 경우에만 저장
+     * 모든 사용자의 결과 저장
      */
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private UUID userId;
 
     /**
@@ -73,7 +73,7 @@ public class AnalysisResult {
      * 최종 신뢰도 점수
      */
     @Column(name = "final_score", nullable = false)
-    private Integer finalScore;
+    private Double finalScore;
 
     /**
      * 최종 판정
@@ -137,7 +137,7 @@ public class AnalysisResult {
         String originalInput,
         String claimText,
         String sourceUrl,
-        Integer finalScore,
+        Double finalScore,
         Verdict verdict,
         String questionSummary,
         String answerSummary,
@@ -178,7 +178,7 @@ public class AnalysisResult {
     }
 
     public void updateResult(
-        Integer finalScore,
+        Double finalScore,
         Verdict verdict,
         String questionSummary,
         String answerSummary,
