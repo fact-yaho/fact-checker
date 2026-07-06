@@ -7,11 +7,13 @@ import com.yaho.factchecker.domain.user.repository.UserRepository;
 import com.yaho.factchecker.domain.user.service.UserService;
 import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -30,8 +32,8 @@ public class UserController {
 
     // 2. 회원탈퇴 API
     @DeleteMapping
-    public ResponseEntity<String> deleteUser(@AuthenticationPrincipal UserDetails userDetails) {
-        String currentUserEmail = userDetails.getUsername();
+    public ResponseEntity<String> deleteUser(@AuthenticationPrincipal Object principal) {
+        String currentUserEmail = extractEmail(principal);
         userService.deleteUser(currentUserEmail);
         return ResponseEntity.ok("회원탈퇴 완료. 유저 ID: " + currentUserEmail);
     }
@@ -83,4 +85,33 @@ public class UserController {
 
         return ResponseEntity.ok(new MyPageResponse(user));
     }
+
+     //다양한 인증 방식(JWT/세션)에서 안전하게 이메일을 추출하고 누락을 방어합니다.
+
+    private String extractEmail(Object principal) {
+        String email = null;
+
+        if (principal instanceof Jwt jwt) {
+            email = jwt.getClaimAsString("email");
+            // (null 혹은 빈 문자열 체크 시 401 에러 반환)
+            if (email == null || email.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "토큰 내 이메일 정보가 유효하지 않습니다.");
+            }
+        } else if (principal instanceof PrincipalDetails principalDetails) {
+            email = principalDetails.getUser().getEmail();
+        } else if (principal instanceof UserDetails userDetails) {
+            email = userDetails.getUsername();
+        }
+
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증 정보가 올바르지 않습니다.");
+        }
+
+        return email;
+    }
+
+
+
+
+
 }
