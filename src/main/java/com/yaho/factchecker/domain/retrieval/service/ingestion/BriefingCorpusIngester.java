@@ -1,17 +1,16 @@
 package com.yaho.factchecker.domain.retrieval.service.ingestion;
 
-import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaho.factchecker.domain.retrieval.service.DocumentFactWriter;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.infrastructure.retrieval.ContentCleaner;
 import com.yaho.factchecker.infrastructure.retrieval.dto.BriefingItem;
 import com.yaho.factchecker.infrastructure.retrieval.dto.MofaResponse;
 import com.yaho.factchecker.infrastructure.retrieval.feign.MofaFeignClient;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 // 브리핑 코퍼스 적재기 (= 공식입장·브리핑·논평 카테고리)
 @Slf4j
@@ -21,12 +20,13 @@ public class BriefingCorpusIngester extends AbstractCorpusIngester<BriefingItem>
     private final MofaFeignClient mofaFeignClient;
     private final String serviceKey;
 
-    public BriefingCorpusIngester(EvidenceDocumentRepository evidenceDocumentRepository,
-                                  ContentCleaner contentCleaner,
+    public BriefingCorpusIngester(ContentCleaner contentCleaner,
                                   DocumentFactWriter documentFactWriter,
+                                  IngestionFailureRecorder failureRecorder,
+                                  ObjectMapper objectMapper,
                                   MofaFeignClient mofaFeignClient,
                                   @Value("${mofa.api.service-key}") String serviceKey) {
-        super(evidenceDocumentRepository, contentCleaner, documentFactWriter);
+        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper);
         this.mofaFeignClient = mofaFeignClient;
         this.serviceKey = serviceKey;
     }
@@ -51,6 +51,12 @@ public class BriefingCorpusIngester extends AbstractCorpusIngester<BriefingItem>
             log.error("[{}] API 호출 실패 (page={})", apiName(), pageNo, e);
             return List.of();
         }
+    }
+
+    // 재처리용 item 타입
+    @Override
+    protected Class<BriefingItem> itemType() {
+        return BriefingItem.class;
     }
 
     @Override
