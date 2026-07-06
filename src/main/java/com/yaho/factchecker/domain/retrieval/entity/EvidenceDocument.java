@@ -60,12 +60,17 @@ public class EvidenceDocument {
     @Column(name = "author_or_dept", length = 255)
     private String authorOrDept;
 
+    // content_cleaned의 SHA-256 해시
+    // (코퍼스 중복 적재 방지용, 코퍼스만 세팅. per-claim 은 null)
+    @Column(name = "content_hash", length = 64)
+    private String contentHash;
+
     @Builder
     public EvidenceDocument(UUID claimId, SourceType sourceType, String apiName, String searchKeyword,
                             String title, String contentCleaned, ClaimCategory categoryName,
-                            LocalDateTime publishedAt, String originalUrl, String authorOrDept) {
+                            LocalDateTime publishedAt, String originalUrl, String authorOrDept,
+                            String contentHash) {
         this.claimId = claimId;
-        // 미지정 시 PER_CLAIM 기본값
         this.sourceType = (sourceType != null) ? sourceType : SourceType.PER_CLAIM;
         this.apiName = apiName;
         this.searchKeyword = searchKeyword;
@@ -75,5 +80,6 @@ public class EvidenceDocument {
         this.publishedAt = publishedAt;
         this.originalUrl = originalUrl;
         this.authorOrDept = authorOrDept;
+        this.contentHash = contentHash;
     }
 }

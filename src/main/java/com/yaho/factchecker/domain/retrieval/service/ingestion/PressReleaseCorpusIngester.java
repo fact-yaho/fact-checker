@@ -1,6 +1,7 @@
 package com.yaho.factchecker.domain.retrieval.service.ingestion;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.service.DocumentFactWriter;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.infrastructure.retrieval.ContentCleaner;
@@ -10,8 +11,6 @@ import com.yaho.factchecker.infrastructure.retrieval.feign.MofaFeignClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 // 보도자료 코퍼스 적재기 (= 공식입장·브리핑·논평 카테고리)
 @Slf4j
@@ -25,9 +24,10 @@ public class PressReleaseCorpusIngester extends AbstractCorpusIngester<PressRele
                                       DocumentFactWriter documentFactWriter,
                                       IngestionFailureRecorder failureRecorder,
                                       ObjectMapper objectMapper,
+                                      EvidenceDocumentRepository evidenceDocumentRepository,
                                       MofaFeignClient mofaFeignClient,
                                       @Value("${mofa.api.service-key}") String serviceKey) {
-        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper);
+        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper, evidenceDocumentRepository);
         this.mofaFeignClient = mofaFeignClient;
         this.serviceKey = serviceKey;
     }
@@ -38,19 +38,8 @@ public class PressReleaseCorpusIngester extends AbstractCorpusIngester<PressRele
     }
 
     @Override
-    protected List<PressReleaseItem> fetchPage(int pageNo, int numOfRows) {
-        try {
-            MofaResponse<PressReleaseItem> response =
-                    mofaFeignClient.getPressReleases(serviceKey, pageNo, numOfRows, "JSON");
-            if (!response.isSuccess()) {
-                log.warn("[{}] API 실패 응답 (page={})", apiName(), pageNo);
-                return List.of();
-            }
-            return response.items();
-        } catch (Exception e) {
-            log.error("[{}] API 호출 실패 (page={})", apiName(), pageNo, e);
-            return List.of();
-        }
+    protected MofaResponse<PressReleaseItem> fetchPage(int pageNo, int numOfRows) {
+        return mofaFeignClient.getPressReleases(serviceKey, pageNo, numOfRows, "JSON");
     }
 
     // 재처리용 item 타입

@@ -1,13 +1,13 @@
 package com.yaho.factchecker.domain.retrieval.service.ingestion;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.service.DocumentFactWriter;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.infrastructure.retrieval.ContentCleaner;
 import com.yaho.factchecker.infrastructure.retrieval.dto.BriefingItem;
 import com.yaho.factchecker.infrastructure.retrieval.dto.MofaResponse;
 import com.yaho.factchecker.infrastructure.retrieval.feign.MofaFeignClient;
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -24,9 +24,10 @@ public class BriefingCorpusIngester extends AbstractCorpusIngester<BriefingItem>
                                   DocumentFactWriter documentFactWriter,
                                   IngestionFailureRecorder failureRecorder,
                                   ObjectMapper objectMapper,
+                                  EvidenceDocumentRepository evidenceDocumentRepository,
                                   MofaFeignClient mofaFeignClient,
                                   @Value("${mofa.api.service-key}") String serviceKey) {
-        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper);
+        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper, evidenceDocumentRepository);
         this.mofaFeignClient = mofaFeignClient;
         this.serviceKey = serviceKey;
     }
@@ -38,19 +39,8 @@ public class BriefingCorpusIngester extends AbstractCorpusIngester<BriefingItem>
     }
 
     @Override
-    protected List<BriefingItem> fetchPage(int pageNo, int numOfRows) {
-        try {
-            MofaResponse<BriefingItem> response =
-                    mofaFeignClient.getBriefings(serviceKey, pageNo, numOfRows, "JSON");
-            if (!response.isSuccess()) {
-                log.warn("[{}] API 실패 응답 (page={})", apiName(), pageNo);
-                return List.of();
-            }
-            return response.items();
-        } catch (Exception e) {
-            log.error("[{}] API 호출 실패 (page={})", apiName(), pageNo, e);
-            return List.of();
-        }
+    protected MofaResponse<BriefingItem> fetchPage(int pageNo, int numOfRows) {
+        return mofaFeignClient.getBriefings(serviceKey, pageNo, numOfRows, "JSON");
     }
 
     // 재처리용 item 타입

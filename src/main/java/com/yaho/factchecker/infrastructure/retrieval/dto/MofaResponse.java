@@ -34,6 +34,14 @@ public record MofaResponse<T>(Response<T> response) {
         return response.body().items().item();
     }
 
+    // 전체 건수 추출 (없으면 0) — 스케줄러의 마지막 페이지 계산에 사용
+    public int totalCount() {
+        if (response == null || response.body() == null || response.body().totalCount() == null) {
+            return 0;
+        }
+        return response.body().totalCount();
+    }
+
     // 성공 판별. 외교부 API는 정상 시 resultCode="0". header 없으면 파싱 성공을 성공으로 간주
     public boolean isSuccess() {
         if (response == null) {

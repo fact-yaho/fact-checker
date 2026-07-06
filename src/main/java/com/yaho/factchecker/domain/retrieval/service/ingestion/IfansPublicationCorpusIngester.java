@@ -1,6 +1,7 @@
 package com.yaho.factchecker.domain.retrieval.service.ingestion;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.service.DocumentFactWriter;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.infrastructure.retrieval.ContentCleaner;
@@ -10,8 +11,6 @@ import com.yaho.factchecker.infrastructure.retrieval.feign.MofaFeignClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 // 외교안보연구소(IFANS) 발간자료 코퍼스 적재기 (= 국제정세·다자외교 카테고리)
 // description 이 본문, cond(국가) 없어 코퍼스 유형으로 전체 페이징 적재
@@ -26,9 +25,10 @@ public class IfansPublicationCorpusIngester extends AbstractCorpusIngester<Ifans
                                           DocumentFactWriter documentFactWriter,
                                           IngestionFailureRecorder failureRecorder,
                                           ObjectMapper objectMapper,
+                                          EvidenceDocumentRepository evidenceDocumentRepository,
                                           MofaFeignClient mofaFeignClient,
                                           @Value("${mofa.api.service-key}") String serviceKey) {
-        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper);
+        super(contentCleaner, documentFactWriter, failureRecorder, objectMapper, evidenceDocumentRepository);
         this.mofaFeignClient = mofaFeignClient;
         this.serviceKey = serviceKey;
     }
@@ -39,20 +39,9 @@ public class IfansPublicationCorpusIngester extends AbstractCorpusIngester<Ifans
     }
 
     @Override
-    protected List<IfansPublicationItem> fetchPage(int pageNo, int numOfRows) {
-        try {
-            // 발간자료 API 는 returnType 파라미터가 없음 (명세 기준)
-            MofaResponse<IfansPublicationItem> response =
-                    mofaFeignClient.getIfansPublications(serviceKey, pageNo, numOfRows);
-            if (!response.isSuccess()) {
-                log.warn("[{}] API 실패 응답 (page={})", apiName(), pageNo);
-                return List.of();
-            }
-            return response.items();
-        } catch (Exception e) {
-            log.error("[{}] API 호출 실패 (page={})", apiName(), pageNo, e);
-            return List.of();
-        }
+    protected MofaResponse<IfansPublicationItem> fetchPage(int pageNo, int numOfRows) {
+        // 발간자료 API 는 returnType 파라미터가 없음 (명세 기준)
+        return mofaFeignClient.getIfansPublications(serviceKey, pageNo, numOfRows);
     }
 
     // 재처리용 item 타입
