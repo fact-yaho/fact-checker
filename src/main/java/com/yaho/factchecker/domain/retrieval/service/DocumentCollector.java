@@ -16,20 +16,19 @@ import java.util.UUID;
 /**
  * 근거문서 수집 오케스트레이터 (라우터)
  * 소주장 카테고리에 해당하는 수집기(ApiDocumentCollector)들만 골라 실행하고,
- * 결과를 모아 evidence_document 에 일괄저장
+ * 결과를 evidence_document 에 저장한 뒤, 각 문서에서 fact 를 추출·임베딩하여 document_fact 에 저장한다.
  *
- * 카테고리 → API 매핑은 각 수집기의 supportedCategories() 에 분산 정의(하드코딩)
- * 검색 안 되는 API(A부류: 보도자료/브리핑/연설문/업무계획)가 필요한 카테고리
- * (공식입장·브리핑·논평 / 외교정책·기조)는 담당 수집기가 없어 결과가 비며, 추후 추가 예정
+ * per-claim 문서도 fact 벡터를 갖게 되어, 재정렬 시 BM25 + 벡터 양쪽 신호를 받는다.
+ * (코퍼스 문서와 동일하게 DocumentFactWriter 로 처리)
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentCollector {
 
-    // 스프링이 ApiDocumentCollector 구현체를 전부 주입
     private final List<ApiDocumentCollector> collectors;
     private final EvidenceDocumentRepository evidenceDocumentRepository;
+    private final DocumentFactWriter documentFactWriter;   // ← 추가
 
     public void collectAndSave(ClaimRetrievalRequest request) {
         UUID claimId = request.claimId();
@@ -40,7 +39,6 @@ public class DocumentCollector {
             return;
         }
 
-        // 이 카테고리를 담당하는 수집기만 선택
         List<ApiDocumentCollector> matched = collectors.stream()
                 .filter(c -> c.supportedCategories().contains(category))
                 .toList();
@@ -50,7 +48,6 @@ public class DocumentCollector {
             return;
         }
 
-        // 매칭된 수집기들 실행 → 결과 합침
         List<EvidenceDocument> collected = new ArrayList<>();
         for (ApiDocumentCollector collector : matched) {
             collected.addAll(collector.collect(request));
@@ -61,8 +58,23 @@ public class DocumentCollector {
             return;
         }
 
-        evidenceDocumentRepository.saveAll(collected);
+        // 문서 저장
+        List<EvidenceDocument> saved = evidenceDocumentRepository.saveAll(collected);
         log.info("총 {}건 저장. claimId={}, category={}, 수집기={}개",
-                collected.size(), claimId, category, matched.size());
+                saved.size(), claimId, category, matched.size());
+
+        // 각 문서에서 fact 추출·임베딩·저장 (per-claim 도 벡터를 갖도록)
+        // 한 문서 실패는 로그 남기고 계속(resilient). 실패 문서는 벡터 없이 BM25 로만 참여.
+        int totalFacts = 0, failed = 0;
+        for (EvidenceDocument doc : saved) {
+            try {
+                totalFacts += documentFactWriter.writeFacts(doc);
+            } catch (Exception e) {
+                failed++;
+                log.error("[per-claim fact] 문서 처리 실패 (title='{}'): {}",
+                        doc.getTitle(), e.getMessage(), e);
+            }
+        }
+        log.info("per-claim fact 저장 완료. claimId={}, fact {}개, 실패 {}건", claimId, totalFacts, failed);
     }
 }

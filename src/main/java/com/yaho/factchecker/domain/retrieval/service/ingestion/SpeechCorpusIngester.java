@@ -1,9 +1,7 @@
 package com.yaho.factchecker.domain.retrieval.service.ingestion;
 
-import com.yaho.factchecker.application.ai.port.FactExtractionPort;
-import com.yaho.factchecker.domain.retrieval.repository.DocumentFactRepository;
 import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
-import com.yaho.factchecker.domain.retrieval.service.TextEmbedder;
+import com.yaho.factchecker.domain.retrieval.service.DocumentFactWriter;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.infrastructure.retrieval.ContentCleaner;
 import com.yaho.factchecker.infrastructure.retrieval.dto.MofaResponse;
@@ -24,14 +22,11 @@ public class SpeechCorpusIngester extends AbstractCorpusIngester<SpeechItem> {
     private final String serviceKey;
 
     public SpeechCorpusIngester(EvidenceDocumentRepository evidenceDocumentRepository,
-                                DocumentFactRepository documentFactRepository,
                                 ContentCleaner contentCleaner,
-                                FactExtractionPort factExtractionPort,
-                                TextEmbedder textEmbedder,
+                                DocumentFactWriter documentFactWriter,
                                 MofaFeignClient mofaFeignClient,
                                 @Value("${mofa.api.service-key}") String serviceKey) {
-        super(evidenceDocumentRepository, documentFactRepository, contentCleaner,
-                factExtractionPort, textEmbedder);
+        super(evidenceDocumentRepository, contentCleaner, documentFactWriter);
         this.mofaFeignClient = mofaFeignClient;
         this.serviceKey = serviceKey;
     }
