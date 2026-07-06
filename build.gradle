@@ -40,6 +40,7 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+    implementation 'io.github.openfeign:feign-jackson'
     // PostgreSQL 드라이버
     runtimeOnly 'org.postgresql:postgresql'
     // pgvector
@@ -54,6 +55,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     // 소셜로그인 스프링 공식 라이브러리
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    // API 요청으로 넘어온 문서 내용 정제용
+    implementation 'org.jsoup:jsoup:1.18.1'
 }
 
 dependencyManagement {

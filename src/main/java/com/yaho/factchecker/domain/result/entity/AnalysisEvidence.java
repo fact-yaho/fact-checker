@@ -110,13 +110,13 @@ public class AnalysisEvidence {
      * 주장과 근거의 관련도 점수
      */
     @Column(name = "relevance_score")
-    private Integer relevanceScore;
+    private Double relevanceScore;
 
     /**
      * 주장과 근거의 유사도 점수
      */
     @Column(name = "similarity_score")
-    private Integer similarityScore;
+    private Double similarityScore;
 
     /**
      * 화면 표시 순서
@@ -146,8 +146,8 @@ public class AnalysisEvidence {
         LocalDateTime publishedAt,
         String snippet,
         Stance stance,
-        Integer relevanceScore,
-        Integer similarityScore,
+        Double relevanceScore,
+        Double similarityScore,
         Integer displayOrder
     ) {
         this.analysisResult = analysisResult;
@@ -181,7 +181,7 @@ public class AnalysisEvidence {
         this.displayOrder = displayOrder;
     }
 
-    public void updateScores(Integer relevanceScore, Integer similarityScore) {
+    public void updateScores(Double relevanceScore, Double similarityScore) {
         this.relevanceScore = relevanceScore;
         this.similarityScore = similarityScore;
     }

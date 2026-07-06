@@ -37,6 +37,7 @@ public class RetrievalService {
 
     private final EvidenceDocumentRepository evidenceDocumentRepository;
     private final RerankResultRepository rerankResultRepository;
+    private final DocumentCollector documentCollector;
     private final TextEmbedder textEmbedder;
     private final VectorScorer vectorScorer;
     private final Bm25Scorer bm25Scorer;
@@ -80,8 +81,8 @@ public class RetrievalService {
         //     return getTopKDocuments(claimId);
         // }
 
-        // [3단계] 소주장에 대한 근거문서 수집·저장 — TODO (FeignClient 이후)
-        // collectAndSaveDocuments(request);
+        // [3단계] 소주장에 대한 근거문서 수집·저장
+        collectAndSaveDocuments(request);
 
         // [4단계] fact 추출·임베딩
         String queryVector = embedClaim(request.canonicalClaim());
@@ -112,10 +113,10 @@ public class RetrievalService {
     //     return false;
     // }
 
-    // [3단계] 근거문서 수집·저장. TODO: FeignClient(공공데이터 API) 후 구현
-    // private void collectAndSaveDocuments(ClaimRetrievalRequest request) {
-    //     // category → category_api 로 호출 대상 API 결정 → 호출 → 정제 → evidence_document 저장
-    // }
+    // [3단계] 근거문서 수집·저장
+    private void collectAndSaveDocuments(ClaimRetrievalRequest request) {
+        documentCollector.collectAndSave(request);
+    }
 
     // [4단계] 소주장 텍스트를 임베딩하여 pgvector 리터럴 문자열로 반환
     private String embedClaim(String canonicalClaim) {
