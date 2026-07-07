@@ -7,14 +7,18 @@ import com.yaho.factchecker.domain.retrieval.dto.RetrievedEvidence;
 import com.yaho.factchecker.domain.retrieval.dto.VectorResult;
 import com.yaho.factchecker.domain.retrieval.entity.EvidenceDocument;
 import com.yaho.factchecker.domain.retrieval.entity.RerankResult;
+import com.yaho.factchecker.domain.retrieval.repository.ClaimEmbeddingRepository;
 import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.repository.RerankResultRepository;
+import com.yaho.factchecker.domain.retrieval.repository.projection.SimilarClaimProjection;
 import com.yaho.factchecker.global.util.VectorUtils;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * < 근거 탐색 오케스트레이터 >
  *
  * [제공 기능]
- * 1. 소주장 하나에 대한 캐싱 조회
+ * 1. 소주장 하나에 대한 캐싱 조회 (유사 소주장 + 연도범위 일치 + 유효기간 내 → 기존 결과 재사용)
  * 2. 소주장 하나에 대한 상위 K개의 근거 문서를 제공 (claim_id로 좁힌 문서들 + 코퍼스)
  */
 @Slf4j
@@ -36,6 +40,9 @@ public class RetrievalService {
 
     private final EvidenceDocumentRepository evidenceDocumentRepository;
     private final RerankResultRepository rerankResultRepository;
+    // 캐시 조회(findSimilarClaims)용 — 저장은 ClaimEmbeddingWriter(독립 트랜잭션)가 담당
+    private final ClaimEmbeddingRepository claimEmbeddingRepository;
+    private final ClaimEmbeddingWriter claimEmbeddingWriter;
     private final DocumentCollector documentCollector;
     private final TextEmbedder textEmbedder;
     private final VectorScorer vectorScorer;
@@ -50,15 +57,14 @@ public class RetrievalService {
     // 1단계 fact 후보 수
     private static final int CORPUS_FACT_LIMIT = 100;
 
-    /*
-     * [retrieveEvidence() 메서드 설명]
-     *
-     * 소주장 1개에 대한 상위 근거문서 K개를 얻는 공개 진입점
-     * per-claim(claim_id로 좁힌 문서) 수집 문서와 코퍼스 문서를 함께 후보로 하여 재정렬
-     *
-     * request = claim-analysis 결과로 얻은 소주장 1개 정보
-     * 반환 = 상위 K개 근거문서 + 점수/순위 (순위 오름차순), 검증 불가/결과 없으면 빈 리스트
-     */
+    // [캐시] 유사 소주장 후보 조회 수
+    private static final int SIMILAR_CLAIM_LIMIT = 5;
+    // [캐시] 동일 질문으로 볼 최소 코사인 유사도
+    private static final double SIMILARITY_THRESHOLD = 0.9;
+    // [캐시] 결과 유효기간 (일) — 이보다 오래된 결과는 재검색
+    private static final long CACHE_VALID_DAYS = 2;
+
+    // 소주장 1개에 대한 상위 근거문서 K개를 얻는 공개 진입점
     @Transactional
     public List<RetrievedEvidence> retrieveEvidence(ClaimRetrievalRequest request) {
         // [0단계] 검증 불가 소주장은 skip
@@ -70,22 +76,23 @@ public class RetrievalService {
 
         UUID claimId = request.claimId();
 
-        // [1단계] 유사질문(중복) 검사 — TODO (소주장 전달 흐름 후)
-        // similarClaimCheck(request);
+        // [1단계] 소주장 임베딩 (캐시 조회·벡터검색·임베딩 저장에 재사용)
+        float[] queryEmbedding = textEmbedder.embed(request.canonicalClaim());
+        String queryVector = VectorUtils.toVectorLiteral(queryEmbedding);
 
-        // [2단계] 캐시 확인 — TODO (BaseEntity created_at 기준 유효기간 판단)
-        // if (isCacheValid(claimId)) {
-        //     return getTopKDocuments(claimId);
-        // }
+        // [2단계] 캐시 조회 — 유사 소주장 + 연도범위 일치 + 유효기간 내면 기존 결과 재사용
+        UUID cacheHitClaimId = findCacheHit(request, queryVector);
+        if (cacheHitClaimId != null) {
+            log.info("캐시 히트 → 기존 결과 재사용. 요청claimId={}, 재사용claimId={}", claimId, cacheHitClaimId);
+            return getTopKDocuments(cacheHitClaimId);
+        }
 
-        // [3단계] 소주장에 대한 근거문서 수집·저장 (per-claim), 수집 문서에 fact/벡터도 생성됨
+        // === 캐시 미스 → 실제 검색 ===
+
+        // [3단계] 소주장에 대한 근거문서 수집·저장 (per-claim), fact/벡터 생성
         collectAndSaveDocuments(request);
 
-        // [4단계] 소주장 임베딩
-        String queryVector = embedClaim(request.canonicalClaim());
-
-        // [5단계] 벡터(하이브리드) → 후보 수집(per-claim + 코퍼스) → BM25 → RRF
-        // 벡터 점수는 여기서 한 번만 계산하고 후보 조회/RRF에 재사용
+        // [4단계] 벡터(하이브리드) → 후보 수집 → BM25 → RRF (연도 필터 적용)
         List<VectorResult> vectorResults =
                 vectorScorer.scoreHybrid(claimId, queryVector, CORPUS_TOP_K, CORPUS_FACT_LIMIT,
                         request.fromYear(), request.toYear());
@@ -94,52 +101,84 @@ public class RetrievalService {
 
         List<RerankRow> rerankRows = rerank(request.canonicalClaim(), candidateMap, vectorResults);
 
-        // [6단계] 재정렬 결과 저장 (기존 내역 덮어쓰기), 후보 맵을 넘겨 코퍼스 문서 누락 방지
-        saveRerankResults(claimId, rerankRows, candidateMap);
+        // [5단계] 재정렬 결과 저장 (연도 범위 포함 — 캐시 키)
+        saveRerankResults(claimId, rerankRows, candidateMap, request.fromYear(), request.toYear());
+
+        // [6단계] 해당 소주장을 claim_embedding에 저장 (다음 요청부터 캐시 대상)
+        // 독립 트랜잭션(writer)으로 분리 — 저장 실패가 재정렬 결과 저장(메인 트랜잭션)을 롤백시키지 않도록,
+        // 호출측에서 예외를 잡아 결과 반환을 보장
+        try {
+            claimEmbeddingWriter.save(claimId, request.category(),
+                    request.canonicalClaim(), queryEmbedding);
+        } catch (Exception e) {
+            // 캐시 저장 실패가 검색 결과 반환을 막지 않도록
+            log.error("[캐시 저장] claim_embedding 저장 실패(무시). claimId={}: {}",
+                    claimId, e.getMessage(), e);
+        }
 
         // [7단계] Top-K 근거문서 반환
         return getTopKDocuments(claimId);
     }
 
-    /*
-     * 하단 메서드들은 retrieveEvidence()의 단계별 세부 로직
+    /**
+     * ===== 캐시 =====
+     * 캐시 히트 여부 판정 → 재사용할 claimId (없으면 null)
+     * 1) 유사 소주장 Top-K (유사도 내림차순)
+     * 2) 유사도 ≥ 임계값 후보만
+     * 3) 그 후보 중 연도범위 일치 + 유효기간 내인 claimId 집합 조회
+     * 4) 유사도 순서대로 훑어 집합에 있는 첫 claimId 반환 (가장 유사한 유효 캐시)
      */
 
-    // [1단계] 유사질문(중복) 검사, TODO
-    // private void similarClaimCheck(ClaimRetrievalRequest request) { ... }
+    private UUID findCacheHit(ClaimRetrievalRequest request, String queryVector) {
+        // [1단계] 유사 소주장 후보
+        List<SimilarClaimProjection> similar =
+                claimEmbeddingRepository.findSimilarClaims(queryVector, SIMILAR_CLAIM_LIMIT);
+        if (similar.isEmpty()) {
+            return null;
+        }
 
-    // [2단계] 캐시 유효성 판단, TODO
-    // private boolean isCacheValid(UUID claimId) { return false; }
+        // [2단계] 임계값 이상만, 유사도 내림차순 유지 (쿼리가 이미 정렬)
+        List<UUID> candidateIds = similar.stream()
+                .filter(s -> s.getSimilarity() != null && s.getSimilarity() >= SIMILARITY_THRESHOLD)
+                .map(SimilarClaimProjection::getClaimId)
+                .toList();
+        if (candidateIds.isEmpty()) {
+            return null;
+        }
 
+        // [3단계] 연도범위 일치 + 유효기간 내인 claimId 집합
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(CACHE_VALID_DAYS);
+        Set<UUID> cacheable = Set.copyOf(rerankResultRepository.findCacheableClaimIds(
+                candidateIds, request.fromYear(), request.toYear(), cutoff));
+        if (cacheable.isEmpty()) {
+            return null;
+        }
+
+        // [4단계] 유사도 순서대로 훑어 통과 집합에 있는 첫 claimId (가장 유사한 유효 캐시)
+        for (UUID id : candidateIds) {
+            if (cacheable.contains(id)) {
+                return id;
+            }
+        }
+        return null;
+    }
+
+    // ===== 검색 단계별 세부 로직 =====
     // [3단계] 근거문서 수집·저장
     private void collectAndSaveDocuments(ClaimRetrievalRequest request) {
         documentCollector.collectAndSave(request);
     }
 
-    // [4단계] 소주장 텍스트를 임베딩하여 pgvector 리터럴 문자열로 반환
-    private String embedClaim(String canonicalClaim) {
-        float[] vector = textEmbedder.embed(canonicalClaim);
-        return VectorUtils.toVectorLiteral(vector);
-    }
 
-    /**
-     * [5-1단계] 후보 문서 맵 수집 (per-claim + 코퍼스)
-     * -> per-claim = 이 소주장이 수집한 문서 (claim_id로 조회)
-     * -> 코퍼스 = 이미 계산된 하이브리드 벡터 결과에서 per-claim에 없는 문서 id를 추려 엔티티 조회
-     * 벡터를 다시 계산하지 않고, 앞에서 구한 vectorResults를 재사용
-     *
-     * 최종 반환 결과 = evidence_document_id → 엔티티 맵 (BM25/저장 공용)
-     */
+    // [4-1단계] 후보 문서 맵 수집 (per-claim + 코퍼스)
     private Map<UUID, EvidenceDocument> collectCandidateMap(UUID claimId, List<VectorResult> vectorResults) {
         Map<UUID, EvidenceDocument> candidateMap = new LinkedHashMap<>();
 
-        // per-claim 후보
         List<EvidenceDocument> perClaim = evidenceDocumentRepository.findAllByClaimId(claimId);
         for (EvidenceDocument d : perClaim) {
             candidateMap.put(d.getEvidenceDocumentId(), d);
         }
 
-        // 벡터 결과 중 per-claim 에 없는 문서(= 코퍼스 문서) id만 추려 조회
         List<UUID> corpusDocIds = vectorResults.stream()
                 .map(VectorResult::evidenceDocumentId)
                 .filter(id -> !candidateMap.containsKey(id))
@@ -155,10 +194,7 @@ public class RetrievalService {
         return candidateMap;
     }
 
-    /**
-     * [5-2~4단계] BM25 + RRF
-     * 후보 맵(perClaim+corpus) 전체에 BM25를 매기고, 앞에서 구한 벡터 결과와 RRF 융합
-     */
+    // [4-2~4단계] BM25 + RRF
     private List<RerankRow> rerank(String claimText,
                                    Map<UUID, EvidenceDocument> candidateMap,
                                    List<VectorResult> vectorResults) {
@@ -168,22 +204,14 @@ public class RetrievalService {
         }
 
         List<EvidenceDocument> candidates = new ArrayList<>(candidateMap.values());
-
-        // BM25 = 합친 후보 전체 대상
         List<Bm25Result> bm25Results = bm25Scorer.score(claimText, candidates);
-
-        // RRF 융합 (BM25 + 하이브리드 벡터)
         return rrfFusion.fuse(bm25Results, vectorResults);
     }
 
-    /**
-     * [6단계] 재정렬 결과 저장 (기존 내역 덮어쓰기)
-     * 후보 맵(perClaim+corpus)으로 docMap을 만들어 코퍼스 문서도 저장
-     * 기존 결과 삭제를 빈 리스트 검사보다 먼저 수행 (이번 결과가 0건이어도 낡은 결과가 남지 않도록)
-     */
+    // [5단계] 재정렬 결과 저장 (기존 내역 덮어쓰기) + 연도 범위(캐시 키) 저장
     private void saveRerankResults(UUID claimId, List<RerankRow> rows,
-                                   Map<UUID, EvidenceDocument> candidateMap) {
-        // 해당 소주장의 기존 결과 삭제 (덮어쓰기)
+                                   Map<UUID, EvidenceDocument> candidateMap,
+                                   Integer fromYear, Integer toYear) {
         rerankResultRepository.deleteByClaimId(claimId);
 
         if (rows.isEmpty()) {
@@ -193,10 +221,10 @@ public class RetrievalService {
         List<RerankResult> entities = new ArrayList<>(rows.size());
         for (RerankRow row : rows) {
             EvidenceDocument doc = candidateMap.get(row.evidenceDocumentId());
-            if (doc == null) continue; // 방어 (후보에 없는 문서면 skip)
+            if (doc == null) continue;
 
             entities.add(RerankResult.builder()
-                    .claimId(claimId) // 코퍼스 문서도 이 소주장 결과로 저장
+                    .claimId(claimId)
                     .evidenceDocument(doc)
                     .bm25Rank(row.bm25Rank())
                     .bm25Score(row.bm25Score())
@@ -204,10 +232,13 @@ public class RetrievalService {
                     .vectorSimScore(row.vectorScore())
                     .finalScore(row.finalScore())
                     .finalRank(row.finalRank())
+                    .fromYear(fromYear) // 캐시 키 — 해당 결과가 검색된 연도 범위
+                    .toYear(toYear)
                     .build());
         }
         rerankResultRepository.saveAll(entities);
     }
+
 
     // [7단계] Top-K 근거문서 반환
     private List<RetrievedEvidence> getTopKDocuments(UUID claimId) {
