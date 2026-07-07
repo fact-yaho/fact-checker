@@ -3,6 +3,7 @@ package com.yaho.factchecker.domain.result.service;
 import com.yaho.factchecker.domain.result.code.AnalysisStatus;
 import com.yaho.factchecker.domain.result.dto.AnalysisEvidenceResponse;
 import com.yaho.factchecker.domain.result.dto.AnalysisResultDetailResponse;
+import com.yaho.factchecker.domain.result.dto.AnalysisResultSummaryResponse;
 import com.yaho.factchecker.domain.result.dto.ScoreBreakdownResponse;
 import com.yaho.factchecker.domain.result.entity.AnalysisEvidence;
 import com.yaho.factchecker.domain.result.entity.AnalysisResult;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,45 @@ public class AnalysisResultReadService {
     private final AnalysisResultRepository analysisResultRepository;
     private final ScoreBreakdownRepository scoreBreakdownRepository;
     private final AnalysisEvidenceRepository analysisEvidenceRepository;
+
+    /**
+     * 회원의 이전 분석 결과 목록을 조회합니다.
+     *
+     * 기록 탭 목록 화면에서 사용합니다.
+     */
+    public List<AnalysisResultSummaryResponse> findUserResultSummaries(
+        UUID userId,
+        Pageable pageable
+    ) {
+        validateUserId(userId);
+
+        return analysisResultRepository
+            .findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(userId, pageable)
+            .stream()
+            .map(AnalysisResultSummaryResponse::from)
+            .toList();
+    }
+
+    /**
+     * 회원의 특정 분석 결과 상세를 조회합니다.
+     *
+     * 기록 탭에서 목록 아이템을 클릭했을 때 사용합니다.
+     */
+    public AnalysisResultDetailResponse getUserResultDetail(
+        UUID userId,
+        UUID resultId
+    ) {
+        validateUserId(userId);
+        validateResultId(resultId);
+
+        AnalysisResult result = analysisResultRepository
+            .findByIdAndUserIdAndDeletedAtIsNull(resultId, userId)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "분석 결과를 찾을 수 없습니다. resultId=" + resultId
+            ));
+
+        return toDetailResponse(result);
+    }
 
     /**
      * 단일 claim_id 기준으로 가장 최근 완료된 분석 결과를 조회합니다.
@@ -90,13 +131,14 @@ public class AnalysisResultReadService {
             .toList();
     }
 
+    // Helper Methods =========================================================================
     private AnalysisResultDetailResponse toDetailResponse(AnalysisResult result) {
         ScoreBreakdown scoreBreakdown = scoreBreakdownRepository
-            .findByAnalysisResultId(result.getId())
+            .findByAnalysisResultIdAndDeletedAtIsNull(result.getId())
             .orElse(null);
 
         List<AnalysisEvidence> evidences = analysisEvidenceRepository
-            .findAllByAnalysisResultId(result.getId())
+            .findAllByAnalysisResultIdAndDeletedAtIsNull(result.getId())
             .stream()
             .sorted(Comparator.comparing(AnalysisEvidence::getDisplayOrder))
             .toList();
@@ -116,6 +158,18 @@ public class AnalysisResultReadService {
                 .map(AnalysisEvidenceResponse::from)
                 .toList()
         );
+    }
+
+    private void validateUserId(UUID userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("userId는 필수입니다.");
+        }
+    }
+
+    private void validateResultId(UUID resultId) {
+        if (resultId == null) {
+            throw new IllegalArgumentException("resultId는 필수입니다.");
+        }
     }
 
     private void validateClaimId(UUID claimId) {
