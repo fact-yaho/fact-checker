@@ -46,17 +46,23 @@ public class VectorScorer {
      * < 하이브리드 방식 >
      * = per-claim 문서 벡터 + 코퍼스 문서 벡터를 합쳐 유사도순 rank 재계산
      *
-     * claim_id 로 좁힌 문서와 corpus(source_type='CORPUS' 전체에서 top-k)를 각각 조회한 뒤,
+     * claim_id로 좁힌 문서와 corpus(source_type='CORPUS' 전체에서 top-k)를 각각 조회한 뒤,
      * 같은 문서가 양쪽에 나오면 더 높은 유사도로 병합하고, 전체를 유사도 내림차순으로 rank 를 다시 매김
-     * (두 소스를 그냥 이으면 rank 가 각각 1부터라 중복되므로 반드시 재계산)
+     * (두 소스를 그냥 이으면 rank가 각각 1부터라 중복되므로 반드시 재계산)
+     *
+     * + fromYear/toYear = 코퍼스 연도 필터 (inclusive, null = 해당 방향 무제한)
+     *   per-claim 문서는 수집 시점에 이미 범위가 정해지므로 코퍼스 조회에만 전달
      *
      * claimId = 대상 소주장 (per-claim 문서 범위 한정)
      * queryVector = 쿼리 벡터 리터럴
      * corpusTopK = 코퍼스에서 가져올 상위 문서 수
      * corpusFactLimit = 코퍼스 1단계에서 좁힐 근접 fact 후보 수
+     * fromYear = 코퍼스 연도 하한 (inclusive, null = 하한 없음)
+     * toYear = 코퍼스 연도 상한 (inclusive, null = 상한 없음)
      */
     public List<VectorResult> scoreHybrid(UUID claimId, String queryVector,
-                                          int corpusTopK, int corpusFactLimit) {
+                                          int corpusTopK, int corpusFactLimit,
+                                          Integer fromYear, Integer toYear) {
         if (queryVector == null || queryVector.isBlank()) {
             return Collections.emptyList();
         }
@@ -66,9 +72,10 @@ public class VectorScorer {
                 ? documentFactRepository.findDocumentVectorScores(claimId, queryVector)
                 : Collections.emptyList();
 
-        // [2단계] 코퍼스 문서 벡터 점수 (source_type='CORPUS' 전체에서 top-k)
+        // [2단계] 코퍼스 문서 벡터 점수 (source_type='CORPUS' 전체에서 top-k, 연도 필터 적용)
         List<DocumentVectorScoreProjection> corpus =
-                documentFactRepository.findCorpusDocumentVectorScores(queryVector, corpusFactLimit, corpusTopK);
+                documentFactRepository.findCorpusDocumentVectorScores(
+                        queryVector, corpusFactLimit, corpusTopK, fromYear, toYear);
 
         // [3단계] 병합 (문서 중복 시 더 높은 유사도 유지)
         Map<UUID, Double> merged = new LinkedHashMap<>();

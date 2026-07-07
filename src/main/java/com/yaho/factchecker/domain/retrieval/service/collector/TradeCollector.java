@@ -72,6 +72,11 @@ public class TradeCollector extends AbstractMofaCollector<TradeItem> {
     }
 
     @Override
+    protected Integer extractYear(TradeItem item) {
+        return parseYear(item.ytTradeYear());
+    }
+
+    @Override
     protected EvidenceDocument toEvidenceDocument(UUID claimId, ClaimCategory category,
                                                   String searchKeyword, TradeItem item) {
         String country = notBlank(item.countryNm()) ? item.countryNm() : item.countryEngNm();
@@ -83,6 +88,8 @@ public class TradeCollector extends AbstractMofaCollector<TradeItem> {
         if (notBlank(item.exportCn())) content.append("주요 수출품: ").append(item.exportCn().trim()).append("\n");
         if (notBlank(item.incomeCn())) content.append("주요 수입품: ").append(item.incomeCn().trim());
 
+        Integer tradeYear = parseYear(item.ytTradeYear());
+
         return EvidenceDocument.builder()
                 .claimId(claimId)
                 .apiName(apiName())
@@ -91,7 +98,19 @@ public class TradeCollector extends AbstractMofaCollector<TradeItem> {
                         + (notBlank(item.ytTradeYear()) ? " (" + item.ytTradeYear() + ")" : ""))
                 .contentCleaned(content.toString().trim())
                 .categoryName(category)
+                .publishedAt(tradeYear != null
+                        ? java.time.LocalDate.of(tradeYear, 1, 1).atStartOfDay() : null)
                 .build();
+    }
+
+    // "2021" 같은 문자열 연도 → Integer, 숫자 아니면 null
+    private Integer parseYear(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private boolean notBlank(String s) {

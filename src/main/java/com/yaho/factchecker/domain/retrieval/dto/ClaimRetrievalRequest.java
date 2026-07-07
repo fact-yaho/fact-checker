@@ -13,7 +13,8 @@ public record ClaimRetrievalRequest(
         String unverifiableReason,     // 검증 불가 사유
         ClaimCategory category,        // 카테고리
         List<CountryInfo> countries,   // 대상 국가
-        String timeScope               // 검증 시점
+        Integer fromYear,              // 검색 연도 하한 (inclusive, null = 하한 없음)
+        Integer toYear                 // 검색 연도 상한 (inclusive, null = 상한 없음)
 ) {
     public record CountryInfo(String name, String code) {}
 }

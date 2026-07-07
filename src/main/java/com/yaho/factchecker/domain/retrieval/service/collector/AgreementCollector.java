@@ -73,6 +73,11 @@ public class AgreementCollector extends AbstractMofaCollector<AgreementItem> {
     }
 
     @Override
+    protected Integer extractYear(AgreementItem item) {
+        return item.year();
+    }
+
+    @Override
     protected EvidenceDocument toEvidenceDocument(UUID claimId, ClaimCategory category,
                                                   String searchKeyword, AgreementItem item) {
         String country = notBlank(item.countryNm()) ? item.countryNm() : item.countryEngNm();
@@ -89,7 +94,19 @@ public class AgreementCollector extends AbstractMofaCollector<AgreementItem> {
                 .title("대한민국과 " + country + "의 협정" + (notBlank(date) ? " (" + date + ")" : ""))
                 .contentCleaned(content.toString().trim())
                 .categoryName(category)
+                .publishedAt(toLocalDateTime(item.year(), item.month(), item.day()))
                 .build();
+    }
+
+    // 연/월/일 → LocalDateTime. 연도 없으면 null, 월/일 없으면 1로 폴백
+    private java.time.LocalDateTime toLocalDateTime(Integer y, Integer m, Integer d) {
+        if (y == null) return null;
+        try {
+            return java.time.LocalDate.of(y, (m != null ? m : 1), (d != null ? d : 1)).atStartOfDay();
+        } catch (Exception e) {
+            // 월/일 값이 비정상(예: 13월)이면 연초로 폴백
+            return java.time.LocalDate.of(y, 1, 1).atStartOfDay();
+        }
     }
 
     private String formatDate(Integer y, Integer m, Integer d) {

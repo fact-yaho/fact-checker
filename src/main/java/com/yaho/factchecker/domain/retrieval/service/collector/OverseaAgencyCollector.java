@@ -72,6 +72,11 @@ public class OverseaAgencyCollector extends AbstractMofaCollector<OverseaAgencyI
     }
 
     @Override
+    protected Integer extractYear(OverseaAgencyItem item) {
+        return item.writtenYear();
+    }
+
+    @Override
     protected EvidenceDocument toEvidenceDocument(UUID claimId, ClaimCategory category,
                                                   String searchKeyword, OverseaAgencyItem item) {
         String country = notBlank(item.countryNm()) ? item.countryNm() : item.countryEngNm();
@@ -89,6 +94,8 @@ public class OverseaAgencyCollector extends AbstractMofaCollector<OverseaAgencyI
                 .title(country + " 우리나라기관 진출현황")
                 .contentCleaned(content.toString().trim())
                 .categoryName(category)
+                .publishedAt(item.writtenYear() != null
+                        ? java.time.LocalDate.of(item.writtenYear(), 1, 1).atStartOfDay() : null)
                 .build();
     }
 

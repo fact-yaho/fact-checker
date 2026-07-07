@@ -39,40 +39,60 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
     /**
      * [CORPUS: 전체 코퍼스에서 벡터 검색 → 문서 Top-K]
      *
-     * 1단계(서브쿼리): 코퍼스 fact 중 쿼리 벡터에 가장 가까운 fact 를 factLimit 개만 조회
-     *   - ORDER BY fact_vector <=> ... LIMIT 형태라 HNSW 인덱스(idx_document_fact_vector, 코사인)를 탐(ANN)
-     *   - 코퍼스 전체 fact 를 훑지 않고 근접 후보만 빠르게 확보
-     * 2단계(바깥): 좁혀진 fact 후보만 문서별 MAX 유사도로 집계 → 상위 topK 문서
+     * 1단계(서브쿼리 top_facts): 코퍼스 fact 중 쿼리 벡터에 가장 가까운 fact를 factLimit개 조회 (ANN)
+     *   - 연도 필터를 여기 넣지 않음 → ANN 후보가 연도 때문에 조기 소진되어 recall이 떨어지는 것 방지
+     * 2단계(중간 조인): top_facts 를 evidence_document와 조인하며 연도 필터 적용 (ANN 이후 필터링)
+     *   - EXTRACT(YEAR ...) 대신 published_at 범위 비교 → 함수 래핑 없이 인덱스 친화적
+     *   - fromYear → make_date(fromYear,1,1) 이상 / toYear → make_date(toYear+1,1,1) 미만 (연도 전체 포함)
+     *   - published_at IS NULL 문서는 연도 조건과 무관하게 항상 포함(recall 우선)
+     * 3단계(바깥): 문서별 MAX 유사도로 집계 → 상위 topK 문서
      *
-     * 근사(approximate) 특성: 한 문서의 최고 fact 가 factLimit 밖이면 누락될 수 있으므로
-     * factLimit 은 topK 대비 넉넉히(예: topK=5 → factLimit=100~200) 준다
+     * 근사(approximate) 특성: ANN 후보(factLimit) 중 연도 매칭분만 남으므로, 연도가 희소하면
+     * 최종 문서가 topK 보다 적을 수 있음, 이 경우 factLimit을 키워야 함(현재 topK=5 → factLimit=100).
      *
      * queryVector = pgvector 리터럴 "[v1,v2,...]"
-     * factLimit    = 1단계에서 좁힐 근접 fact 후보 수
+     * factLimit    = ANN 1단계에서 뽑을 근접 fact 후보 수
      * topK         = 최종 반환할 상위 문서 수
+     * fromYear     = 연도 하한 (inclusive, null = 하한 없음)
+     * toYear       = 연도 상한 (inclusive, null = 상한 없음)
      */
     @Query(value = """
             SELECT
-                top_facts.evidence_document_id AS evidenceDocumentId,
-                MAX(1 - (top_facts.fact_vector <=> CAST(:queryVector AS vector))) AS maxSimilarity
+                filtered.evidence_document_id AS evidenceDocumentId,
+                MAX(1 - (filtered.fact_vector <=> CAST(:queryVector AS vector))) AS maxSimilarity
             FROM (
-                SELECT df.evidence_document_id AS evidence_document_id,
-                       df.fact_vector AS fact_vector
-                FROM document_fact df
-                JOIN evidence_document ed
-                    ON df.evidence_document_id = ed.evidence_document_id
-                WHERE ed.source_type = 'CORPUS'
-                  AND df.fact_vector IS NOT NULL
-                ORDER BY df.fact_vector <=> CAST(:queryVector AS vector)
-                LIMIT :factLimit
-            ) AS top_facts
-            GROUP BY top_facts.evidence_document_id
+                SELECT top_facts.evidence_document_id AS evidence_document_id,
+                       top_facts.fact_vector AS fact_vector
+                FROM (
+                    SELECT df.evidence_document_id AS evidence_document_id,
+                           df.fact_vector AS fact_vector
+                    FROM document_fact df
+                    JOIN evidence_document ed
+                        ON df.evidence_document_id = ed.evidence_document_id
+                    WHERE ed.source_type = 'CORPUS'
+                      AND df.fact_vector IS NOT NULL
+                    ORDER BY df.fact_vector <=> CAST(:queryVector AS vector)
+                    LIMIT :factLimit
+                ) AS top_facts
+                JOIN evidence_document ed2
+                    ON top_facts.evidence_document_id = ed2.evidence_document_id
+                WHERE ed2.published_at IS NULL
+                   OR (
+                       (CAST(:fromYear AS integer) IS NULL
+                           OR ed2.published_at >= make_date(:fromYear, 1, 1))
+                       AND (CAST(:toYear AS integer) IS NULL
+                           OR ed2.published_at < make_date(:toYear + 1, 1, 1))
+                   )
+            ) AS filtered
+            GROUP BY filtered.evidence_document_id
             ORDER BY maxSimilarity DESC
             LIMIT :topK
             """, nativeQuery = true)
     List<DocumentVectorScoreProjection> findCorpusDocumentVectorScores(
             @Param("queryVector") String queryVector,
             @Param("factLimit") int factLimit,
-            @Param("topK") int topK
+            @Param("topK") int topK,
+            @Param("fromYear") Integer fromYear,
+            @Param("toYear") Integer toYear
     );
 }

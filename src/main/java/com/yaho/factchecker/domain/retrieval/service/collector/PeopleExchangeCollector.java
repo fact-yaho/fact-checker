@@ -73,6 +73,11 @@ public class PeopleExchangeCollector extends AbstractMofaCollector<PeopleExchang
     }
 
     @Override
+    protected Integer extractYear(PeopleExchangeItem item) {
+        return item.year();
+    }
+
+    @Override
     protected EvidenceDocument toEvidenceDocument(UUID claimId, ClaimCategory category,
                                                   String searchKeyword, PeopleExchangeItem item) {
         String country = notBlank(item.countryNm()) ? item.countryNm() : item.countryEngNm();
@@ -90,7 +95,18 @@ public class PeopleExchangeCollector extends AbstractMofaCollector<PeopleExchang
                 .title(country + " 주요인사 교류" + (notBlank(date) ? " (" + date + ")" : ""))
                 .contentCleaned(content.toString().trim())
                 .categoryName(category)
+                .publishedAt(toLocalDateTime(item.year(), item.month(), item.day()))
                 .build();
+    }
+
+    // 연/월/일 → LocalDateTime. 연도 없으면 null, 월/일 없으면 1로 폴백
+    private java.time.LocalDateTime toLocalDateTime(Integer y, Integer m, Integer d) {
+        if (y == null) return null;
+        try {
+            return java.time.LocalDate.of(y, (m != null ? m : 1), (d != null ? d : 1)).atStartOfDay();
+        } catch (Exception e) {
+            return java.time.LocalDate.of(y, 1, 1).atStartOfDay();
+        }
     }
 
     private String formatDate(Integer y, Integer m, Integer d) {

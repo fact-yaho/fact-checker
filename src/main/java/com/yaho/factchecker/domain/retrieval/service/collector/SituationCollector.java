@@ -74,6 +74,11 @@ public class SituationCollector extends AbstractMofaCollector<SituationItem> {
     }
 
     @Override
+    protected Integer extractYear(SituationItem item) {
+        return item.year();
+    }
+
+    @Override
     protected EvidenceDocument toEvidenceDocument(UUID claimId, ClaimCategory category,
                                                   String searchKeyword, SituationItem item) {
         String country = notBlank(item.countryNm()) ? item.countryNm() : item.countryEngNm();
@@ -90,7 +95,18 @@ public class SituationCollector extends AbstractMofaCollector<SituationItem> {
                 .title(country + " 주요정세" + (notBlank(date) ? " (" + date + ")" : ""))
                 .contentCleaned(content.toString().trim())
                 .categoryName(category)
+                .publishedAt(toLocalDateTime(item.year(), item.month(), item.day()))
                 .build();
+    }
+
+    // 연/월/일 → LocalDateTime. 연도 없으면 null, 월/일 없으면 1로 폴백
+    private java.time.LocalDateTime toLocalDateTime(Integer y, Integer m, Integer d) {
+        if (y == null) return null;
+        try {
+            return java.time.LocalDate.of(y, (m != null ? m : 1), (d != null ? d : 1)).atStartOfDay();
+        } catch (Exception e) {
+            return java.time.LocalDate.of(y, 1, 1).atStartOfDay();
+        }
     }
 
     private String formatDate(Integer y, Integer m, Integer d) {
