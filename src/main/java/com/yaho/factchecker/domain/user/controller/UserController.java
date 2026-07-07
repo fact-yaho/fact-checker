@@ -4,6 +4,7 @@ import com.yaho.factchecker.domain.user.dto.request.SignUpRequest;
 import com.yaho.factchecker.domain.user.dto.response.MyPageResponse;
 import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
+import com.yaho.factchecker.domain.user.service.EmailService;
 import com.yaho.factchecker.domain.user.service.UserService;
 import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,8 @@ public class UserController {
 
     private final UserService userService;
     private final UserRepository userRepository;
+    private final EmailService emailService;
+
 
     // 1. 회원가입 API
     @PostMapping("/signup")
@@ -73,6 +76,43 @@ public class UserController {
         }
         return ResponseEntity.ok("사용 가능한 닉네임입니다!.");
     }
+
+    @PostMapping("/send-verification")
+    public ResponseEntity<String> sendVerificationCode(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body("이메일 값이 비어있습니다.");
+        }
+
+        try {
+            // 이메일 서비스에게 실제 발송과 메모리 저장을 몽땅 위임합니다.
+            emailService.sendVerificationEmail(email);
+            return ResponseEntity.ok("네이버 메일로 인증 코드가 발송되었습니다. 메일함을 확인하세요!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("메일 발송 중 오류가 발생했습니다: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/verify-code")
+    public ResponseEntity<String> verifyCode(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String code = request.get("code");
+
+        if (email == null || code == null) {
+            return ResponseEntity.badRequest().body("이메일 또는 인증 코드가 누락되었습니다.");
+        }
+
+        // 이메일 서비스의 메모리 맵에 조회를 요청합니다.
+        boolean isVerified = emailService.verifyCode(email, code);
+
+        if (isVerified) {
+            return ResponseEntity.ok("이메일 인증에 성공했습니다.");
+        }
+        return ResponseEntity.badRequest().body("인증 코드가 올바르지 않거나 만료되었습니다.");
+    }
+
+
 
     // 5. 내 정보 조회 API (/me)
     @GetMapping("/me")
