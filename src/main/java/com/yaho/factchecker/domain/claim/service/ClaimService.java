@@ -6,6 +6,7 @@ import com.yaho.factchecker.domain.claim.dto.command.ClaimCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimCategoryResponse;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimCountryResponse;
 import com.yaho.factchecker.domain.claim.dto.response.ClaimResponse;
+import com.yaho.factchecker.domain.claim.dto.response.TimeScopeResponse;
 import com.yaho.factchecker.domain.claim.entity.Claim;
 import com.yaho.factchecker.domain.claim.entity.ClaimCategoryMapping;
 import com.yaho.factchecker.domain.claim.entity.ClaimCountry;
@@ -34,7 +35,8 @@ public class ClaimService {
                 .claimAnalysisAiLogId(command.claimAnalysisAiLogId())
                 .originalText(command.originalText())
                 .canonicalClaim(command.canonicalClaim())
-                .timeScope(command.timeScope())
+                .fromYear(command.fromYear())
+                .toYear(command.toYear())
                 .verifiable(command.verifiable())
                 .unverifiableReason(command.unverifiableReason())
                 .build();
@@ -85,7 +87,7 @@ public class ClaimService {
                 claim.getClaimAnalysisAiLogId(),
                 claim.getOriginalText(),
                 claim.getCanonicalClaim(),
-                claim.getTimeScope(),
+                toTimeScopeResponse(claim),
                 claim.isVerifiable(),
                 claim.getUnverifiableReason(),
                 categories,
@@ -101,6 +103,17 @@ public class ClaimService {
                 category.getCategoryName(),
                 mapping.isPrimaryCategory()
         );
+    }
+
+    private TimeScopeResponse toTimeScopeResponse(Claim claim) {
+        if (claim.getFromYear() == null && claim.getToYear() == null) {
+            return null;
+        }
+
+        return TimeScopeResponse.builder()
+                .fromYear(claim.getFromYear())
+                .toYear(claim.getToYear())
+                .build();
     }
 
     private void validateCategories(List<ClaimCategoryCreateCommand> categories) {

@@ -41,8 +41,11 @@ public class Claim extends BaseEntity {
     @Column(name = "canonical_claim", columnDefinition = "TEXT", nullable = false)
     private String canonicalClaim;
 
-    @Column(name = "time_scope", length = 255)
-    private String timeScope;
+    @Column(name = "from_year")
+    private Integer fromYear;
+
+    @Column(name = "to_year")
+    private Integer toYear;
 
     @Column(name = "is_verifiable", nullable = false)
     private boolean verifiable;
@@ -62,7 +65,8 @@ public class Claim extends BaseEntity {
             UUID claimAnalysisAiLogId,
             String originalText,
             String canonicalClaim,
-            String timeScope,
+            Integer fromYear,
+            Integer toYear,
             boolean verifiable,
             String unverifiableReason
     ) {
@@ -72,7 +76,8 @@ public class Claim extends BaseEntity {
         this.claimAnalysisAiLogId = claimAnalysisAiLogId;
         this.originalText = originalText;
         this.canonicalClaim = canonicalClaim;
-        this.timeScope = timeScope;
+        this.fromYear = fromYear;
+        this.toYear = toYear;
         this.verifiable = verifiable;
         this.unverifiableReason = unverifiableReason;
     }
