@@ -87,7 +87,8 @@ public class RetrievalService {
         // [5단계] 벡터(하이브리드) → 후보 수집(per-claim + 코퍼스) → BM25 → RRF
         // 벡터 점수는 여기서 한 번만 계산하고 후보 조회/RRF에 재사용
         List<VectorResult> vectorResults =
-                vectorScorer.scoreHybrid(claimId, queryVector, CORPUS_TOP_K, CORPUS_FACT_LIMIT);
+                vectorScorer.scoreHybrid(claimId, queryVector, CORPUS_TOP_K, CORPUS_FACT_LIMIT,
+                        request.fromYear(), request.toYear());
 
         Map<UUID, EvidenceDocument> candidateMap = collectCandidateMap(claimId, vectorResults);
 

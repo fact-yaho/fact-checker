@@ -47,9 +47,16 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
      * 근사(approximate) 특성: 한 문서의 최고 fact 가 factLimit 밖이면 누락될 수 있으므로
      * factLimit 은 topK 대비 넉넉히(예: topK=5 → factLimit=100~200) 준다
      *
+     * + 연도 필터: fromYear/toYear (둘 다 inclusive, null = 해당 방향 무제한).
+     *   published_at 이 NULL 인 문서는 연도 조건과 무관하게 항상 포함(recall 우선).
+     *   서브쿼리 WHERE 에서 걸어, ANN(LIMIT :factLimit) 후보 자체가 연도 매칭된 것만 되도록 함.
+     *   nullable 파라미터는 CAST(:x AS integer) IS NULL 로 비교해 타입 추론 오류 방지.
+     *
      * queryVector = pgvector 리터럴 "[v1,v2,...]"
      * factLimit    = 1단계에서 좁힐 근접 fact 후보 수
      * topK         = 최종 반환할 상위 문서 수
+     * fromYear     = 연도 하한 (inclusive, null = 하한 없음)
+     * toYear       = 연도 상한 (inclusive, null = 상한 없음)
      */
     @Query(value = """
             SELECT
@@ -63,6 +70,15 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
                     ON df.evidence_document_id = ed.evidence_document_id
                 WHERE ed.source_type = 'CORPUS'
                   AND df.fact_vector IS NOT NULL
+                  AND (
+                      ed.published_at IS NULL
+                      OR (
+                          (CAST(:fromYear AS integer) IS NULL
+                              OR EXTRACT(YEAR FROM ed.published_at) >= :fromYear)
+                          AND (CAST(:toYear AS integer) IS NULL
+                              OR EXTRACT(YEAR FROM ed.published_at) <= :toYear)
+                      )
+                  )
                 ORDER BY df.fact_vector <=> CAST(:queryVector AS vector)
                 LIMIT :factLimit
             ) AS top_facts
@@ -73,6 +89,8 @@ public interface DocumentFactRepository extends JpaRepository<DocumentFact, UUID
     List<DocumentVectorScoreProjection> findCorpusDocumentVectorScores(
             @Param("queryVector") String queryVector,
             @Param("factLimit") int factLimit,
-            @Param("topK") int topK
+            @Param("topK") int topK,
+            @Param("fromYear") Integer fromYear,
+            @Param("toYear") Integer toYear
     );
 }
