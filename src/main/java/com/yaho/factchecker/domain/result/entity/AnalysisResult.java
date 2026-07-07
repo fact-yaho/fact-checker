@@ -64,6 +64,12 @@ public class AnalysisResult {
     private String claimText;
 
     /**
+     * 소주장 ID
+     */
+    @Column(name = "claim_id", columnDefinition = "uuid")
+    private UUID claimId;
+
+    /**
      * URL 입력인 경우 원본 URL
      */
     @Column(name = "source_url", columnDefinition = "TEXT")
@@ -129,13 +135,13 @@ public class AnalysisResult {
     private LocalDateTime deletedAt;
 
     // Factory Methods ----------------------------------------------------------------------
-    // TODO: DTO -> Entity 메서드 추가 필요
     @Builder
     private AnalysisResult(
         UUID userId,
         InputType inputType,
         String originalInput,
         String claimText,
+        UUID claimId,
         String sourceUrl,
         Double finalScore,
         Verdict verdict,
@@ -150,6 +156,7 @@ public class AnalysisResult {
         this.inputType = inputType;
         this.originalInput = originalInput;
         this.claimText = claimText;
+        this.claimId = claimId;
         this.sourceUrl = sourceUrl;
         this.finalScore = finalScore;
         this.verdict = verdict;

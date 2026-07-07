@@ -29,6 +29,7 @@ public class AnalysisResultService {
 
         AnalysisResult result = AnalysisResult.builder()
             .userId(command.userId())
+            .claimId(command.claimId())
             .inputType(command.inputType())
             .originalInput(command.originalInput())
             .claimText(command.claimText())

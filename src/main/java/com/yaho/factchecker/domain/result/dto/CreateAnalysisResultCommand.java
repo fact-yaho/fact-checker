@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record CreateAnalysisResultCommand(
     UUID userId,
+    UUID claimId,
 
     InputType inputType,
     String originalInput,
