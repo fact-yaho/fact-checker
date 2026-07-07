@@ -9,7 +9,7 @@ public record ClaimResponse(
         UUID claimAnalysisAiLogId,
         String originalText,
         String canonicalClaim,
-        String timeScope,
+        TimeScopeResponse timeScope,
         boolean verifiable,
         String unverifiableReason,
         List<ClaimCategoryResponse> categories,
