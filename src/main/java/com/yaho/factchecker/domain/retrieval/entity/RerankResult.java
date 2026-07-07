@@ -1,5 +1,6 @@
 package com.yaho.factchecker.domain.retrieval.entity;
 
+import com.yaho.factchecker.global.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -18,7 +19,7 @@ import org.hibernate.annotations.UuidGenerator;
 @Entity
 @Table(name = "rerank_result")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RerankResult {
+public class RerankResult extends BaseEntity {
 
     @Id
     @UuidGenerator
@@ -51,10 +52,17 @@ public class RerankResult {
     @Column(name = "final_rank", nullable = false)
     private Integer finalRank;
 
+    // 캐시 키 — 이 결과가 검색된 연도 범위 (연도 없는 소주장은 null, null)
+    @Column(name = "from_year")
+    private Integer fromYear;
+
+    @Column(name = "to_year")
+    private Integer toYear;
+
     @Builder
     public RerankResult(UUID claimId, EvidenceDocument evidenceDocument, Integer bm25Rank,
                         Double bm25Score, Integer vectorSimRank, Double vectorSimScore,
-                        Double finalScore, Integer finalRank) {
+                        Double finalScore, Integer finalRank, Integer fromYear, Integer toYear) {
         this.claimId = claimId;
         this.evidenceDocument = evidenceDocument;
         this.bm25Rank = bm25Rank;
@@ -63,5 +71,7 @@ public class RerankResult {
         this.vectorSimScore = vectorSimScore;
         this.finalScore = finalScore;
         this.finalRank = finalRank;
+        this.fromYear = fromYear;
+        this.toYear = toYear;
     }
 }

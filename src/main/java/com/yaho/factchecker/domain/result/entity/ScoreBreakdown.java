@@ -55,13 +55,13 @@ public class ScoreBreakdown {
      * 공식 입장과의 일치도 점수
      */
     @Column(name = "official_consistency_score", nullable = false)
-    private Integer officialConsistencyScore;
+    private Double officialConsistencyScore;
 
     /**
      * 근거 자료의 관련성 점수
      */
     @Column(name = "evidence_relevance_score", nullable = false)
-    private Integer evidenceRelevanceScore;
+    private Double evidenceRelevanceScore;
 
     /**
      * 근거 자료의 충분성 점수
@@ -70,25 +70,25 @@ public class ScoreBreakdown {
      * 오타라면 evidence_sufficiency_score로 수정하는 것을 추천합니다.
      */
     @Column(name = "evidence_sufficiency_score", nullable = false)
-    private Integer evidenceSufficiencyScore;
+    private Double evidenceSufficiencyScore;
 
     /**
      * 근거 자료의 최신성 점수
      */
     @Column(name = "recency_score", nullable = false)
-    private Integer recencyScore;
+    private Double recencyScore;
 
     /**
      * 반박 근거에 따른 감점
      */
     @Column(name = "contradiction_penalty", nullable = false)
-    private Integer contradictionPenalty;
+    private Double contradictionPenalty;
 
     /**
      * 최종 신뢰도 점수
      */
     @Column(name = "final_score", nullable = false)
-    private Integer finalScore;
+    private Double finalScore;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -102,12 +102,12 @@ public class ScoreBreakdown {
     @Builder
     private ScoreBreakdown(
         AnalysisResult analysisResult,
-        Integer officialConsistencyScore,
-        Integer evidenceRelevanceScore,
-        Integer evidenceSufficiencyScore,
-        Integer recencyScore,
-        Integer contradictionPenalty,
-        Integer finalScore
+        Double officialConsistencyScore,
+        Double evidenceRelevanceScore,
+        Double evidenceSufficiencyScore,
+        Double recencyScore,
+        Double contradictionPenalty,
+        Double finalScore
     ) {
         this.analysisResult = analysisResult;
         this.officialConsistencyScore = officialConsistencyScore;
@@ -131,12 +131,12 @@ public class ScoreBreakdown {
     }
 
     public void updateScores(
-        Integer officialConsistencyScore,
-        Integer evidenceRelevanceScore,
-        Integer evidenceSufficiencyScore,
-        Integer recencyScore,
-        Integer contradictionPenalty,
-        Integer finalScore
+        Double officialConsistencyScore,
+        Double evidenceRelevanceScore,
+        Double evidenceSufficiencyScore,
+        Double recencyScore,
+        Double contradictionPenalty,
+        Double finalScore
     ) {
         this.officialConsistencyScore = officialConsistencyScore;
         this.evidenceRelevanceScore = evidenceRelevanceScore;

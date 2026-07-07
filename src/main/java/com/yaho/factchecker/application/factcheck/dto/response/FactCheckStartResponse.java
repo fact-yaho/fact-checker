@@ -1,0 +1,13 @@
+package com.yaho.factchecker.application.factcheck.dto.response;
+
+import com.yaho.factchecker.domain.claim.dto.response.ClaimResponse;
+import java.util.List;
+import java.util.UUID;
+import lombok.Builder;
+
+@Builder
+public record FactCheckStartResponse(
+        UUID factCheckId,
+        List<ClaimResponse> claims
+) {
+}

@@ -1,6 +1,5 @@
 package com.yaho.factchecker.domain.retrieval.entity;
 
-import com.pgvector.PGvector;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
