@@ -64,11 +64,11 @@ public class ClaimService {
 
                 claim.addCategory(mapping);
             }
-
-            Claim savedClaim = claimRepository.save(claim);
-
-            return toResponse(savedClaim);
         }
+
+        Claim savedClaim = claimRepository.save(claim);
+
+        return toResponse(savedClaim);
     }
 
     private ClaimResponse toResponse(Claim claim) {
