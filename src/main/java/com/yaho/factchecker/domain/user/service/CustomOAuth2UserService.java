@@ -22,7 +22,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class CustomOAth2UserService implements OAuth2UserService <OAuth2UserRequest, OAuth2User>{
+public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserRequest, OAuth2User>{
 
     private final UserRepository userRepository;
     @Override

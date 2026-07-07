@@ -15,6 +15,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -38,22 +40,34 @@ public class UserController {
         return ResponseEntity.ok("회원탈퇴 완료. 유저 ID: " + currentUserEmail);
     }
 
-    // 3. 이메일 중복체크 API
+    // 3. 이메일 중복체크 API (JSON Body를 받도록 @RequestBody로 변경)
     @PostMapping("/check-email")
-    public ResponseEntity<String> checkEmail(@RequestParam(name = "email") String email) {
+    public ResponseEntity<String> checkEmail(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body("이메일 값이 비어있습니다.");
+        }
+
         String cleanEmail = email.replace("\"", "").trim();
         boolean isDuplicate = userService.checkEmailDuplicate(cleanEmail);
+
         if (isDuplicate) {
             return ResponseEntity.badRequest().body("이미 존재하는 이메일입니다.");
         }
         return ResponseEntity.ok("사용 가능한 이메일입니다.");
     }
 
-    // 4. 닉네임 중복체크 API
+    // 4. 닉네임 중복체크 API (JSON Body를 받도록 @RequestBody로 변경)
     @PostMapping("/check-nickname")
-    public ResponseEntity<String> checkNickname(@RequestParam(name = "nickname") String nickname) {
+    public ResponseEntity<String> checkNickname(@RequestBody Map<String, String> request) {
+        String nickname = request.get("nickname");
+        if (nickname == null || nickname.isBlank()) {
+            return ResponseEntity.badRequest().body("닉네임 값이 비어있습니다.");
+        }
+
         String cleanNickname = nickname.replace("\"", "").trim();
         boolean isDuplicate = userService.checkNicknameDuplicate(cleanNickname);
+
         if (isDuplicate) {
             return ResponseEntity.badRequest().body("이미 존재하는 닉네임입니다.");
         }
@@ -109,9 +123,4 @@ public class UserController {
 
         return email;
     }
-
-
-
-
-
 }

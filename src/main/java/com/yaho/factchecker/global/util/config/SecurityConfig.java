@@ -1,6 +1,6 @@
 package com.yaho.factchecker.global.util.config;
 
-import com.yaho.factchecker.domain.user.service.CustomOAth2UserService;
+import com.yaho.factchecker.domain.user.service.CustomOAuth2UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +21,7 @@ import java.time.Duration;
 public class SecurityConfig {
 
     @Autowired
-    private CustomOAth2UserService customOAth2UserService;
+    private CustomOAuth2UserService customOAuth2UserService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,17 +43,20 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                        //로그인 화면(/login)과 회원가입 화면(/signup)
+                        .requestMatchers("/login", "/signup").permitAll()
 
-                    //회원 가입전 필수 검증 api 세트와 Oauth api 전체
+                        // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .anyRequest().authenticated()
                 )
-                // OAuth2 로그인 설정 추가
+                // OAuth2 로그인 설정
                 .oauth2Login(oauth2 -> oauth2
+                        .loginPage("/login")
                         .userInfoEndpoint(userInfo -> userInfo
-                                .userService(customOAth2UserService)
+                                .userService(customOAuth2UserService)
                         )
                         .defaultSuccessUrl("/", true)  // 로그인 성공 후 리다이렉트 URL
                 )
@@ -72,7 +75,6 @@ public class SecurityConfig {
 
     @Bean
     public RestTemplate restTemplate() {
-        
         // 요청 팩토리 생성
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         // 타임아웃 10초
@@ -81,8 +83,4 @@ public class SecurityConfig {
         // 타임아웃 팩토리 설정 반환
         return new RestTemplate(factory);
     }
-
-
-
-
 }
