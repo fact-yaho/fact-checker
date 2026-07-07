@@ -5,11 +5,8 @@ import com.yaho.factchecker.domain.retrieval.dto.ClaimRetrievalRequest;
 import com.yaho.factchecker.domain.retrieval.dto.RerankRow;
 import com.yaho.factchecker.domain.retrieval.dto.RetrievedEvidence;
 import com.yaho.factchecker.domain.retrieval.dto.VectorResult;
-import com.yaho.factchecker.domain.retrieval.entity.Category;
-import com.yaho.factchecker.domain.retrieval.entity.ClaimEmbedding;
 import com.yaho.factchecker.domain.retrieval.entity.EvidenceDocument;
 import com.yaho.factchecker.domain.retrieval.entity.RerankResult;
-import com.yaho.factchecker.domain.retrieval.repository.CategoryRepository;
 import com.yaho.factchecker.domain.retrieval.repository.ClaimEmbeddingRepository;
 import com.yaho.factchecker.domain.retrieval.repository.EvidenceDocumentRepository;
 import com.yaho.factchecker.domain.retrieval.repository.RerankResultRepository;
@@ -43,8 +40,9 @@ public class RetrievalService {
 
     private final EvidenceDocumentRepository evidenceDocumentRepository;
     private final RerankResultRepository rerankResultRepository;
+    // 캐시 조회(findSimilarClaims)용 — 저장은 ClaimEmbeddingWriter(독립 트랜잭션)가 담당
     private final ClaimEmbeddingRepository claimEmbeddingRepository;
-    private final CategoryRepository categoryRepository;
+    private final ClaimEmbeddingWriter claimEmbeddingWriter;
     private final DocumentCollector documentCollector;
     private final TextEmbedder textEmbedder;
     private final VectorScorer vectorScorer;
@@ -107,8 +105,16 @@ public class RetrievalService {
         saveRerankResults(claimId, rerankRows, candidateMap, request.fromYear(), request.toYear());
 
         // [6단계] 해당 소주장을 claim_embedding에 저장 (다음 요청부터 캐시 대상)
-        // 저장 실패가 결과 반환을 막지 않도록 방어
-        saveClaimEmbedding(request, queryEmbedding);
+        // 독립 트랜잭션(writer)으로 분리 — 저장 실패가 재정렬 결과 저장(메인 트랜잭션)을 롤백시키지 않도록,
+        // 호출측에서 예외를 잡아 결과 반환을 보장
+        try {
+            claimEmbeddingWriter.save(claimId, request.category(),
+                    request.canonicalClaim(), queryEmbedding);
+        } catch (Exception e) {
+            // 캐시 저장 실패가 검색 결과 반환을 막지 않도록
+            log.error("[캐시 저장] claim_embedding 저장 실패(무시). claimId={}: {}",
+                    claimId, e.getMessage(), e);
+        }
 
         // [7단계] Top-K 근거문서 반환
         return getTopKDocuments(claimId);
@@ -122,6 +128,7 @@ public class RetrievalService {
      * 3) 그 후보 중 연도범위 일치 + 유효기간 내인 claimId 집합 조회
      * 4) 유사도 순서대로 훑어 집합에 있는 첫 claimId 반환 (가장 유사한 유효 캐시)
      */
+
     private UUID findCacheHit(ClaimRetrievalRequest request, String queryVector) {
         // [1단계] 유사 소주장 후보
         List<SimilarClaimProjection> similar =
@@ -156,51 +163,14 @@ public class RetrievalService {
         return null;
     }
 
-    /**
-     * 소주장 임베딩 저장 (캐시 미스로 새로 검색한 경우에만)
-     * category(enum) → Category 엔티티 매핑 필요, 저장 실패는 로그만 남기고 무시(결과 반환 우선)
-     */
-
-    // [6단계] 해당 소주장을 claim_embedding에 저장 (다음 요청부터 캐시 대상)
-    private void saveClaimEmbedding(ClaimRetrievalRequest request, float[] queryEmbedding) {
-        try {
-            // 이미 저장돼 있으면 스킵 (동일 claimId 재요청 등)
-            if (claimEmbeddingRepository.findByClaimId(request.claimId()).isPresent()) {
-                return;
-            }
-
-            Category category = categoryRepository.findByCategoryName(request.category())
-                    .orElse(null);
-            if (category == null) {
-                log.warn("[캐시 저장] category 매핑 없음 → claim_embedding 저장 스킵. category={}, claimId={}",
-                        request.category(), request.claimId());
-                return;
-            }
-
-            ClaimEmbedding embedding = ClaimEmbedding.builder()
-                    .category(category)
-                    .claimId(request.claimId())
-                    .claimText(request.canonicalClaim())
-                    .claimVector(queryEmbedding)
-                    .build();
-            claimEmbeddingRepository.save(embedding);
-            log.info("[캐시 저장] claim_embedding 저장 완료. claimId={}", request.claimId());
-        } catch (Exception e) {
-            // 캐시 저장 실패가 검색 결과 반환을 막지 않도록
-            log.error("[캐시 저장] claim_embedding 저장 실패(무시). claimId={}: {}",
-                    request.claimId(), e.getMessage(), e);
-        }
-    }
-
     // ===== 검색 단계별 세부 로직 =====
     // [3단계] 근거문서 수집·저장
     private void collectAndSaveDocuments(ClaimRetrievalRequest request) {
         documentCollector.collectAndSave(request);
     }
 
-    /**
-     * [4-1단계] 후보 문서 맵 수집 (per-claim + 코퍼스)
-     */
+
+    // [4-1단계] 후보 문서 맵 수집 (per-claim + 코퍼스)
     private Map<UUID, EvidenceDocument> collectCandidateMap(UUID claimId, List<VectorResult> vectorResults) {
         Map<UUID, EvidenceDocument> candidateMap = new LinkedHashMap<>();
 
@@ -262,12 +232,13 @@ public class RetrievalService {
                     .vectorSimScore(row.vectorScore())
                     .finalScore(row.finalScore())
                     .finalRank(row.finalRank())
-                    .fromYear(fromYear)   // 캐시 키 — 해당 결과가 검색된 연도 범위
+                    .fromYear(fromYear) // 캐시 키 — 해당 결과가 검색된 연도 범위
                     .toYear(toYear)
                     .build());
         }
         rerankResultRepository.saveAll(entities);
     }
+
 
     // [7단계] Top-K 근거문서 반환
     private List<RetrievedEvidence> getTopKDocuments(UUID claimId) {
