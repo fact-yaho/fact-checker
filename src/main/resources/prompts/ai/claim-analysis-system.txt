@@ -69,17 +69,20 @@ timeScope 작성 규칙:
   "originalText": "사용자 입력 원문",
   "claims": [
     {
-      "canonicalClaim": "검증 가능한 형태로 정제된 표준 주장",
+      "canonicalClaim": "검증 가능한 형태로 정제된 주장",
       "isVerifiable": true,
       "unverifiableReason": null,
       "category": "BILATERAL_RELATIONS",
       "countries": [
         {
-          "name": "국가명",
+          "name": "대한민국",
           "code": "KOR"
         }
       ],
-      "timeScope": "현재"
+      "timeScope": {
+        "fromYear": 2022,
+        "toYear": null
+      }
     }
   ]
 }

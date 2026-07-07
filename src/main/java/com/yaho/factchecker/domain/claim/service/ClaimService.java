@@ -28,7 +28,7 @@ public class ClaimService {
     private final CategoryRepository categoryRepository;
 
     public ClaimResponse createClaim(ClaimCreateCommand command) {
-        validateCategories(command.categories());
+        validateCategories(command.verifiable(), command.categories());
 
         Claim claim = Claim.builder()
                 .factCheckId(command.factCheckId())
@@ -52,21 +52,23 @@ public class ClaimService {
             }
         }
 
-        for (ClaimCategoryCreateCommand categoryCommand : command.categories()) {
-            Category category = categoryRepository.findByCategoryName(categoryCommand.category())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
+        if (command.categories() != null) {
+            for (ClaimCategoryCreateCommand categoryCommand : command.categories()) {
+                Category category = categoryRepository.findByCategoryName(categoryCommand.category())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
 
-            ClaimCategoryMapping mapping = ClaimCategoryMapping.builder()
-                    .category(category)
-                    .primaryCategory(categoryCommand.primaryCategory())
-                    .build();
+                ClaimCategoryMapping mapping = ClaimCategoryMapping.builder()
+                        .category(category)
+                        .primaryCategory(categoryCommand.primaryCategory())
+                        .build();
 
-            claim.addCategory(mapping);
+                claim.addCategory(mapping);
+            }
+
+            Claim savedClaim = claimRepository.save(claim);
+
+            return toResponse(savedClaim);
         }
-
-        Claim savedClaim = claimRepository.save(claim);
-
-        return toResponse(savedClaim);
     }
 
     private ClaimResponse toResponse(Claim claim) {
@@ -116,7 +118,11 @@ public class ClaimService {
                 .build();
     }
 
-    private void validateCategories(List<ClaimCategoryCreateCommand> categories) {
+    private void validateCategories(boolean verifiable, List<ClaimCategoryCreateCommand> categories) {
+        if (!verifiable) {
+            return;
+        }
+
         if (categories == null || categories.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
