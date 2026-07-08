@@ -52,6 +52,12 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
        String email = oAuth2UserInfo.getEmail();
        String name =  oAuth2UserInfo.getName();
 
+        if ("kakao".equals(registrationId) && (email == null || email.isBlank())) {
+            // oAuth2User.getAttributes().get("id")는 카카오가 주는 절대 겹치지 않는 숫자 고유값입니다.
+            String kakaoId = attributes.get("id").toString();
+            email = kakaoId + "@kakao.user"; // 예: 3214342251@kakao.user
+        }
+
        if(email == null||email.isBlank()){
            throw new OAuth2AuthenticationException("이메일 정보를 가져올 수 없습니다. 이메일 제공 동의가 필요합니다.");
        }
