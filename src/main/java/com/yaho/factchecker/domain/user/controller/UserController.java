@@ -8,6 +8,7 @@ import com.yaho.factchecker.domain.user.service.EmailService;
 import com.yaho.factchecker.domain.user.service.UserService;
 import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -77,6 +79,7 @@ public class UserController {
         return ResponseEntity.ok("사용 가능한 닉네임입니다!.");
     }
 
+    // 이메일 인증코드 발송 api
     @PostMapping("/send-verification")
     public ResponseEntity<String> sendVerificationCode(@RequestBody Map<String, String> request) {
         String email = request.get("email");
@@ -85,21 +88,21 @@ public class UserController {
         }
 
         try {
-            // 이메일 서비스에게 실제 발송과 메모리 저장을 몽땅 위임합니다.
             emailService.sendVerificationEmail(email);
             return ResponseEntity.ok("네이버 메일로 인증 코드가 발송되었습니다. 메일함을 확인하세요!");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("이메일 인증 코드 발송 중 서버 에러 발생: ", e);
             return ResponseEntity.internalServerError().body("메일 발송 중 오류가 발생했습니다: " + e.getMessage());
         }
     }
 
+        // 이메일인증코드 검증 api
     @PostMapping("/verify-code")
     public ResponseEntity<String> verifyCode(@RequestBody Map<String, String> request) {
         String email = request.get("email");
         String code = request.get("code");
 
-        if (email == null || code == null) {
+        if (email == null || email.isBlank() || code == null || code.isBlank()) {
             return ResponseEntity.badRequest().body("이메일 또는 인증 코드가 누락되었습니다.");
         }
 

@@ -5,12 +5,15 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 public class EmailService {
+     //랜덤 secure  인스턴스 생성
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final JavaMailSender mailSender;
 
@@ -20,10 +23,10 @@ public class EmailService {
     // 진짜 이메일을 보내고 메모리에 코드를 저장하는 메서드
     public void sendVerificationEmail(String email) {
         // 6자리 난수 인증 코드 생성
-        String verificationCode = String.format("%06d", (int)(Math.random() * 1000000));
+        String verificationCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
 
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("유저님의네이버아이디@naver.com"); // properties 설정과 일치
+        message.setFrom("@naver.com"); // properties 설정과 일치
         message.setTo(email.trim());
         message.setSubject("[팩트체커] 회원가입 이메일 인증 코드입니다.");
         message.setText("안녕하세요. 팩트체커 플랫폼입니다.\n\n" +
