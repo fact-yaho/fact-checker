@@ -1,6 +1,5 @@
 package com.yaho.factchecker.domain.result.service;
 
-import com.yaho.factchecker.domain.result.dto.CreateAnalysisEvidenceCommand;
 import com.yaho.factchecker.domain.result.dto.CreateAnalysisResultCommand;
 import com.yaho.factchecker.domain.result.entity.AnalysisEvidence;
 import com.yaho.factchecker.domain.result.entity.AnalysisResult;
@@ -29,6 +28,7 @@ public class AnalysisResultService {
 
         AnalysisResult result = AnalysisResult.builder()
             .userId(command.userId())
+            .claimId(command.claimId())
             .inputType(command.inputType())
             .originalInput(command.originalInput())
             .claimText(command.claimText())
@@ -87,11 +87,11 @@ public class AnalysisResultService {
             .orElseThrow(() -> new IllegalArgumentException("분석 결과를 찾을 수 없습니다. id=" + analysisResultId));
 
         List<AnalysisEvidence> evidences =
-            analysisEvidenceRepository.findAllByAnalysisResultId(analysisResultId);
+            analysisEvidenceRepository.findAllByAnalysisResultIdAndDeletedAtIsNull(analysisResultId);
 
         analysisEvidenceRepository.deleteAll(evidences);
 
-        scoreBreakdownRepository.findByAnalysisResultId(analysisResultId)
+        scoreBreakdownRepository.findByAnalysisResultIdAndDeletedAtIsNull(analysisResultId)
             .ifPresent(scoreBreakdownRepository::delete);
 
         analysisResultRepository.delete(analysisResult);

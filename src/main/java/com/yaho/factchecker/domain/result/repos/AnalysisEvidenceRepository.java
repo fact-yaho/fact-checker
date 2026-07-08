@@ -7,5 +7,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AnalysisEvidenceRepository extends JpaRepository<AnalysisEvidence, UUID> {
 
-    List<AnalysisEvidence> findAllByAnalysisResultId(UUID analysisResultId);
+    List<AnalysisEvidence> findAllByAnalysisResultIdAndDeletedAtIsNull(UUID analysisResultId);
+
+    List<AnalysisEvidence> findAllByAnalysisResultIdAndDeletedAtIsNullOrderByDisplayOrderAsc(
+        UUID analysisResultId
+    );
+
+    List<AnalysisEvidence> findAllByAnalysisResultIdInAndDeletedAtIsNullOrderByDisplayOrderAsc(
+        List<UUID> analysisResultIds
+    );
 }
