@@ -12,6 +12,7 @@ import com.yaho.factchecker.domain.ai.dto.request.ClaimAnalysisRequest;
 import com.yaho.factchecker.domain.ai.dto.request.EvidenceForStanceRequest;
 import com.yaho.factchecker.domain.ai.dto.request.StanceAnalysisRequest;
 import com.yaho.factchecker.domain.ai.dto.response.ClaimAnalysisResponse;
+import com.yaho.factchecker.domain.ai.dto.response.EvidenceStanceResultResponse;
 import com.yaho.factchecker.domain.ai.dto.response.StanceAnalysisResponse;
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCategoryCreateCommand;
 import com.yaho.factchecker.domain.claim.dto.command.ClaimCountryCreateCommand;
@@ -22,9 +23,18 @@ import com.yaho.factchecker.domain.claim.service.ClaimService;
 import com.yaho.factchecker.domain.retrieval.dto.ClaimRetrievalRequest;
 import com.yaho.factchecker.domain.retrieval.dto.RetrievedEvidence;
 import com.yaho.factchecker.domain.retrieval.service.RetrievalService;
+import com.yaho.factchecker.domain.scoring.OverallScoreAggregator;
+import com.yaho.factchecker.domain.scoring.ScoreCalculator;
+import com.yaho.factchecker.domain.scoring.dto.ClaimScoreInput;
+import com.yaho.factchecker.domain.scoring.dto.EvidenceJudgment;
+import com.yaho.factchecker.domain.scoring.dto.OverallScoreCalculationResult;
+import com.yaho.factchecker.domain.scoring.dto.ScoreCalculationResult;
 import com.yaho.factchecker.global.type.ClaimCategory;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +46,8 @@ public class FactCheckOrchestratorService {
     private final ClaimService claimService;
     private final RetrievalService retrievalService;
     private final StanceAnalysisPort stanceAnalysisPort;
+    private final ScoreCalculator scoreCalculator;
+    private final OverallScoreAggregator overallScoreAggregator;
 
     public FactCheckStartResponse start(FactCheckStartRequest request) {
         UUID factCheckId = UUID.randomUUID();
@@ -56,10 +68,16 @@ public class FactCheckOrchestratorService {
 
         List<ClaimStanceResponse> stanceResults = toClaimStanceResponses(analysisBundles);
 
+        List<ClaimScoreInput> claimScoreInputs = toClaimScoreInputs(analysisBundles);
+
+        OverallScoreCalculationResult overallScore =
+                overallScoreAggregator.aggregate(claimScoreInputs);
+
         return FactCheckStartResponse.builder()
                 .factCheckId(factCheckId)
                 .claims(claims)
                 .stanceResults(stanceResults)
+                .overallScore(overallScore)
                 .build();
     }
 
@@ -128,18 +146,6 @@ public class FactCheckOrchestratorService {
                 .build();
     }
 
-    private List<ClaimStanceResponse> toClaimStanceResponses(
-            List<ClaimAnalysisBundle> analysisBundles
-    ) {
-        return analysisBundles.stream()
-                .map(bundle -> ClaimStanceResponse.builder()
-                        .claimId(bundle.claim().claimId())
-                        .canonicalClaim(bundle.claim().canonicalClaim())
-                        .stanceAnalysis(bundle.stanceAnalysis())
-                        .build())
-                .toList();
-    }
-
     private ClaimRetrievalRequest toRetrievalRequest(ClaimResponse claim) {
         return new ClaimRetrievalRequest(
                 claim.claimId(),
@@ -186,5 +192,61 @@ public class FactCheckOrchestratorService {
                 ))
                 .toList();
     }
-}
 
+    private List<ClaimScoreInput> toClaimScoreInputs(List<ClaimAnalysisBundle> analysisBundles) {
+        return analysisBundles.stream()
+                .map(bundle -> {
+                    List<EvidenceJudgment> evidenceJudgments = toEvidenceJudgments(bundle);
+                    ScoreCalculationResult scoreResult = scoreCalculator.calculate(evidenceJudgments);
+
+                    return ClaimScoreInput.of(
+                            bundle.claim().claimId(),
+                            bundle.claim().canonicalClaim(),
+                            scoreResult
+                    );
+                })
+                .toList();
+    }
+
+    private List<EvidenceJudgment> toEvidenceJudgments(ClaimAnalysisBundle bundle) {
+        Map<UUID, EvidenceStanceResultResponse> stanceByEvidenceId =
+                bundle.stanceAnalysis().evidences().stream()
+                        .collect(Collectors.toMap(
+                                EvidenceStanceResultResponse::evidenceDocumentId,
+                                Function.identity()
+                        ));
+
+        return bundle.retrievedEvidences().stream()
+                .map(evidence -> {
+                    EvidenceStanceResultResponse stanceResult =
+                            stanceByEvidenceId.get(evidence.evidenceDocumentId());
+
+                    if (stanceResult == null) {
+                        throw new IllegalStateException(
+                                "stance 결과가 없는 evidence입니다. evidenceDocumentId="
+                                        + evidence.evidenceDocumentId()
+                        );
+                    }
+
+                    return EvidenceJudgment.of(
+                            evidence.evidenceDocumentId(),
+                            stanceResult.stance(),
+                            evidence.relevanceScore(),
+                            evidence.similarityScore()
+                    );
+                })
+                .toList();
+    }
+
+    private List<ClaimStanceResponse> toClaimStanceResponses(
+            List<ClaimAnalysisBundle> analysisBundles
+    ) {
+        return analysisBundles.stream()
+                .map(bundle -> ClaimStanceResponse.builder()
+                        .claimId(bundle.claim().claimId())
+                        .canonicalClaim(bundle.claim().canonicalClaim())
+                        .stanceAnalysis(bundle.stanceAnalysis())
+                        .build())
+                .toList();
+    }
+}
