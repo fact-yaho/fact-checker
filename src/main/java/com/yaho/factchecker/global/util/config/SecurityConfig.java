@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
+                        .requestMatchers("/api/v1/fact-checks").permitAll()
                         .anyRequest().authenticated()
                 )
                 // OAuth2 로그인 설정
@@ -83,4 +84,9 @@ public class SecurityConfig {
         // 타임아웃 팩토리 설정 반환
         return new RestTemplate(factory);
     }
+}
+
+
+
+
 }

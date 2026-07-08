@@ -9,6 +9,6 @@ public record ExtractedClaim(
         String unverifiableReason,
         ClaimCategory category,
         List<CountryInfo> countries,
-        String timeScope
+        TimeScopeInfo timeScope
 ) {
 }
