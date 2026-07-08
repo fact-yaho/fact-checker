@@ -14,10 +14,10 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    // 💾 메모리(프로퍼티) 기반 인증 코드 저장소
+    // 메모리(프로퍼티) 기반 인증 코드 저장소
     private final Map<String, String> verificationCodes = new ConcurrentHashMap<>();
 
-    // ✉️ 진짜 이메일을 보내고 메모리에 코드를 저장하는 메서드
+    // 진짜 이메일을 보내고 메모리에 코드를 저장하는 메서드
     public void sendVerificationEmail(String email) {
         // 6자리 난수 인증 코드 생성
         String verificationCode = String.format("%06d", (int)(Math.random() * 1000000));
