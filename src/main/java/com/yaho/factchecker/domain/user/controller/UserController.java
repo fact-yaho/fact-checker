@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -33,7 +34,7 @@ public class UserController {
     // 1. 회원가입 API
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignUpRequest request) {
-        Long userId = userService.signUp(request);
+            UUID userId = userService.signUp(request);
         return ResponseEntity.ok("회원가입 완료. 유저 ID: " + userId);
     }
 
@@ -116,7 +117,6 @@ public class UserController {
     }
 
 
-
     // 5. 내 정보 조회 API (/me)
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal Object principal) {
@@ -125,10 +125,12 @@ public class UserController {
 
         if (principal instanceof Jwt jwt) {
             finalEmail = jwt.getClaimAsString("email");
+
         }
 
         else if (principal instanceof PrincipalDetails principalDetails) {
             finalEmail = principalDetails.getUser().getEmail();
+
         }
         else if (principal instanceof UserDetails userDetails) {
             finalEmail = userDetails.getUsername();
@@ -148,6 +150,7 @@ public class UserController {
     private String extractEmail(Object principal) {
         String email = null;
 
+
         if (principal instanceof Jwt jwt) {
             email = jwt.getClaimAsString("email");
             // (null 혹은 빈 문자열 체크 시 401 에러 반환)
@@ -166,4 +169,8 @@ public class UserController {
 
         return email;
     }
+
+
+
+
 }

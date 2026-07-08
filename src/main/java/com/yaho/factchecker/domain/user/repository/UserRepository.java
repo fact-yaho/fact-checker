@@ -3,9 +3,10 @@ package com.yaho.factchecker.domain.user.repository;
 import com.yaho.factchecker.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
+import java.util.UUID;
 
 
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, UUID> {
 
     // 회원가입할 때 이미 존재하는 이메일인지 확인할 때 사용합니다.
     Optional<User> findByEmail(String email);

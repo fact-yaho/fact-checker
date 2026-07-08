@@ -21,6 +21,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -39,7 +40,7 @@ public class UserService {
 
     /* 1. 회원가입 로직 */
     @Transactional
-    public Long signUp(SignUpRequest request) {
+        public UUID signUp(SignUpRequest request) {
 
         // 새로운 유저 엔티티 생성 기본값 유저
         User user = new User(
@@ -128,7 +129,7 @@ public class UserService {
     }
 
     // 6. 마이페이지
-    public MyPageResponse getMyPage(Long userId) {
+    public MyPageResponse getMyPage(UUID userId) {
         // 유저가 진짜 있는지 조회하고 가져오기
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다. ID: " + userId));
