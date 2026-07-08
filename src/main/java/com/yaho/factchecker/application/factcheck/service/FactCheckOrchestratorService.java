@@ -2,6 +2,7 @@ package com.yaho.factchecker.application.factcheck.service;
 
 import com.yaho.factchecker.application.ai.port.ClaimAnalysisPort;
 import com.yaho.factchecker.application.ai.port.StanceAnalysisPort;
+import com.yaho.factchecker.application.factcheck.dto.internal.ClaimAnalysisBundle;
 import com.yaho.factchecker.application.factcheck.dto.request.FactCheckStartRequest;
 import com.yaho.factchecker.application.factcheck.dto.response.ClaimStanceResponse;
 import com.yaho.factchecker.application.factcheck.dto.response.FactCheckStartResponse;
@@ -48,10 +49,12 @@ public class FactCheckOrchestratorService {
                 .map(claimService::createClaim)
                 .toList();
 
-        List<ClaimStanceResponse> stanceResults = claims.stream()
+        List<ClaimAnalysisBundle> analysisBundles = claims.stream()
                 .filter(ClaimResponse::verifiable)
-                .map(this::analyzeStance)
+                .map(this::analyzeClaim)
                 .toList();
+
+        List<ClaimStanceResponse> stanceResults = toClaimStanceResponses(analysisBundles);
 
         return FactCheckStartResponse.builder()
                 .factCheckId(factCheckId)
@@ -105,7 +108,7 @@ public class FactCheckOrchestratorService {
                 .toList();
     }
 
-    private ClaimStanceResponse analyzeStance(ClaimResponse claim) {
+    private ClaimAnalysisBundle analyzeClaim(ClaimResponse claim) {
         ClaimRetrievalRequest retrievalRequest = toRetrievalRequest(claim);
 
         List<RetrievedEvidence> retrievedEvidences =
@@ -118,11 +121,23 @@ public class FactCheckOrchestratorService {
                 )
         );
 
-        return ClaimStanceResponse.builder()
-                .claimId(claim.claimId())
-                .canonicalClaim(claim.canonicalClaim())
+        return ClaimAnalysisBundle.builder()
+                .claim(claim)
+                .retrievedEvidences(retrievedEvidences)
                 .stanceAnalysis(stanceAnalysis)
                 .build();
+    }
+
+    private List<ClaimStanceResponse> toClaimStanceResponses(
+            List<ClaimAnalysisBundle> analysisBundles
+    ) {
+        return analysisBundles.stream()
+                .map(bundle -> ClaimStanceResponse.builder()
+                        .claimId(bundle.claim().claimId())
+                        .canonicalClaim(bundle.claim().canonicalClaim())
+                        .stanceAnalysis(bundle.stanceAnalysis())
+                        .build())
+                .toList();
     }
 
     private ClaimRetrievalRequest toRetrievalRequest(ClaimResponse claim) {
