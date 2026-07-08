@@ -1,6 +1,7 @@
 package com.yaho.factchecker.domain.user.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,9 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+
+    @Value("${spring.mail.username}")
+    private String fromEmail;
     // 메모리(프로퍼티) 기반 인증 코드 저장소
     private final Map<String, String> verificationCodes = new ConcurrentHashMap<>();
 
@@ -26,7 +30,7 @@ public class EmailService {
         String verificationCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
 
         SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("@naver.com"); // properties 설정과 일치
+        message.setFrom(fromEmail); // 하드코딩제거 후 수정
         message.setTo(email.trim());
         message.setSubject("[팩트체커] 회원가입 이메일 인증 코드입니다.");
         message.setText("안녕하세요. 팩트체커 플랫폼입니다.\n\n" +

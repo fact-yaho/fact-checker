@@ -31,6 +31,8 @@ public class SecurityConfig {
                                 "/api/v1/users/signup",
                                 "/api/v1/users/check-email",
                                 "/api/v1/users/check-nickname",
+                                "/api/v1/users/send-verification",
+                                "/api/v1/users/verify-code",
                                 "/oauth2/**",
                                 "/login/oauth2/**"
                         )
@@ -45,10 +47,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         //로그인 화면(/login)과 회원가입 화면(/signup)
                         .requestMatchers("/login", "/signup").permitAll()
-
                         // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
-                        .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
+                        .requestMatchers("/api/v1/users/signup","/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
+                        .requestMatchers("/api/v1/users/send-verification").permitAll()
+                        .requestMatchers("/api/v1/users/verify-code").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/fact-checks").permitAll()
                         .anyRequest().authenticated()
@@ -84,8 +87,6 @@ public class SecurityConfig {
         // 타임아웃 팩토리 설정 반환
         return new RestTemplate(factory);
     }
-}
-
 
 
 

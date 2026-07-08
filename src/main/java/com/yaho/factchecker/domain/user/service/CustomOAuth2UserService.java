@@ -71,11 +71,11 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
                     // 이름 누락시 방어 코드
                     String safeName = (name != null && !name.isBlank()) ? name : "user";
 
-                    String uniqueNickname = name + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
+                    String uniqueNickname = safeName + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
 
                     User newUser =User.builder()
                             .email(email)
-                            .name(name)
+                            .name(safeName)
                             .nickname(uniqueNickname) // 구글 이름을 기본 닉네임으로 설정 예시
                             .role(Role.USER) // 기본 역할 설정
                             .build();
