@@ -46,8 +46,8 @@ public class AnalysisEvidence {
      * 분석 결과
      */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "analysis_result_id", nullable = false)
-    private AnalysisResult analysisResult;
+    @JoinColumn(name = "claim_analysis_result_id", nullable = false)
+    private ClaimAnalysisResult claimAnalysisResult;
 
     // NOTE : 추후 AiLog 엔티티가 생기면 연관관계로 변경 가능
     /**
@@ -136,7 +136,7 @@ public class AnalysisEvidence {
     // Factory Methods ---------------------------------------------------------------
     @Builder
     private AnalysisEvidence(
-        AnalysisResult analysisResult,
+        ClaimAnalysisResult claimAnalysisResult,
         UUID aiLogId,
         EvidenceSourceType sourceType,
         String sourceTitle,
@@ -150,7 +150,7 @@ public class AnalysisEvidence {
         Double similarityScore,
         Integer displayOrder
     ) {
-        this.analysisResult = analysisResult;
+        this.claimAnalysisResult = claimAnalysisResult;
         this.aiLogId = aiLogId;
         this.sourceType = sourceType;
         this.sourceTitle = sourceTitle;

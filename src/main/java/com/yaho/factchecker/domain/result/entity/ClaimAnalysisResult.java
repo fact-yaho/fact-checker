@@ -1,14 +1,15 @@
 package com.yaho.factchecker.domain.result.entity;
 
-import com.yaho.factchecker.domain.result.code.AnalysisStatus;
-import com.yaho.factchecker.global.type.InputType;
 import com.yaho.factchecker.global.type.Verdict;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -23,14 +24,14 @@ import org.hibernate.annotations.UuidGenerator;
 
 @Getter
 @Entity
-@Table(name = "analysis_result")
+@Table(name = "claim_analysis_result")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = """
-    UPDATE analysis_result
+    UPDATE claim_analysis_result
     SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
 """)
-public class AnalysisResult {
+public class ClaimAnalysisResult {
 
     @Id
     @GeneratedValue
@@ -38,59 +39,55 @@ public class AnalysisResult {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "user_id")
-    private UUID userId;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "input_type", length = 20, nullable = false)
-    private InputType inputType;
-
-    @Column(name = "original_input", columnDefinition = "TEXT", nullable = false)
-    private String originalInput;
-
-    @Column(name = "source_url", columnDefinition = "TEXT")
-    private String sourceUrl;
+    /**
+     * 사용자 입력 전체에 대한 분석 결과
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "analysis_result_id", nullable = false)
+    private AnalysisResult analysisResult;
 
     /**
-     * 소주장별 점수를 종합한 최종 점수
+     * 소주장 ID
+     */
+    @Column(name = "claim_id", columnDefinition = "uuid")
+    private UUID claimId;
+
+    /**
+     * 분리된 소주장 텍스트
+     */
+    @Column(name = "claim_text", columnDefinition = "TEXT", nullable = false)
+    private String claimText;
+
+    /**
+     * 소주장 표시 순서
+     */
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder;
+
+    /**
+     * 소주장별 최종 점수
      */
     @Column(name = "final_score", nullable = false)
     private Double finalScore;
 
     /**
-     * 소주장별 판정을 종합한 최종 판정
+     * 소주장별 최종 판정
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "verdict", length = 30, nullable = false)
     private Verdict verdict;
 
     /**
-     * 사용자 입력 전체에 대한 질문 요약
-     */
-    @Column(name = "question_summary", columnDefinition = "TEXT", nullable = false)
-    private String questionSummary;
-
-    /**
-     * 사용자 입력 전체에 대한 분석 결과 요약
+     * 소주장별 분석 요약
      */
     @Column(name = "answer_summary", columnDefinition = "TEXT", nullable = false)
     private String answerSummary;
 
     /**
-     * 전체 분석에 대한 종합 설명
+     * 소주장별 상세 설명
      */
     @Column(name = "explanation", columnDefinition = "TEXT")
     private String explanation;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "analysis_status", length = 30, nullable = false)
-    private AnalysisStatus analysisStatus;
-
-    @Column(name = "model_version", length = 50)
-    private String modelVersion;
-
-    @Column(name = "scoring_version", length = 50)
-    private String scoringVersion;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -102,32 +99,24 @@ public class AnalysisResult {
     private LocalDateTime deletedAt;
 
     @Builder
-    private AnalysisResult(
-        UUID userId,
-        InputType inputType,
-        String originalInput,
-        String sourceUrl,
+    private ClaimAnalysisResult(
+        AnalysisResult analysisResult,
+        UUID claimId,
+        String claimText,
+        Integer displayOrder,
         Double finalScore,
         Verdict verdict,
-        String questionSummary,
         String answerSummary,
-        String explanation,
-        AnalysisStatus analysisStatus,
-        String modelVersion,
-        String scoringVersion
+        String explanation
     ) {
-        this.userId = userId;
-        this.inputType = inputType;
-        this.originalInput = originalInput;
-        this.sourceUrl = sourceUrl;
+        this.analysisResult = analysisResult;
+        this.claimId = claimId;
+        this.claimText = claimText;
+        this.displayOrder = displayOrder;
         this.finalScore = finalScore;
         this.verdict = verdict;
-        this.questionSummary = questionSummary;
         this.answerSummary = answerSummary;
         this.explanation = explanation;
-        this.analysisStatus = analysisStatus;
-        this.modelVersion = modelVersion;
-        this.scoringVersion = scoringVersion;
     }
 
     @PrePersist
@@ -135,10 +124,6 @@ public class AnalysisResult {
         LocalDateTime now = LocalDateTime.now();
         this.createdAt = now;
         this.updatedAt = now;
-
-        if (this.analysisStatus == null) {
-            this.analysisStatus = AnalysisStatus.COMPLETED;
-        }
     }
 
     @PreUpdate
@@ -149,25 +134,12 @@ public class AnalysisResult {
     public void updateResult(
         Double finalScore,
         Verdict verdict,
-        String questionSummary,
         String answerSummary,
-        String explanation,
-        AnalysisStatus analysisStatus
+        String explanation
     ) {
         this.finalScore = finalScore;
         this.verdict = verdict;
-        this.questionSummary = questionSummary;
         this.answerSummary = answerSummary;
         this.explanation = explanation;
-        this.analysisStatus = analysisStatus;
-    }
-
-    public void markFailed(String explanation) {
-        this.analysisStatus = AnalysisStatus.FAILED;
-        this.explanation = explanation;
-    }
-
-    public void restore() {
-        this.deletedAt = null;
     }
 }

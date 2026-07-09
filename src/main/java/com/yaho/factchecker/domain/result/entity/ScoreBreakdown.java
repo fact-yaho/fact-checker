@@ -18,7 +18,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UuidGenerator;
 
 @Getter
@@ -26,7 +25,10 @@ import org.hibernate.annotations.UuidGenerator;
 @Table(
     name = "score_breakdown",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_score_breakdown_analysis_result", columnNames = "analysis_result_id")
+        @UniqueConstraint(
+            name = "uk_score_breakdown_claim_analysis_result",
+            columnNames = "claim_analysis_result_id"
+        )
     }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -45,47 +47,29 @@ public class ScoreBreakdown {
     private UUID id;
 
     /**
-     * 분석 결과
+     * 소주장별 분석 결과
      */
     @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "analysis_result_id", nullable = false)
-    private AnalysisResult analysisResult;
+    @JoinColumn(name = "claim_analysis_result_id", nullable = false)
+    private ClaimAnalysisResult claimAnalysisResult;
 
-    /**
-     * 공식 입장과의 일치도 점수
-     */
     @Column(name = "official_consistency_score", nullable = false)
     private Double officialConsistencyScore;
 
-    /**
-     * 근거 자료의 관련성 점수
-     */
     @Column(name = "evidence_relevance_score", nullable = false)
     private Double evidenceRelevanceScore;
 
-    /**
-     * 근거 자료의 충분성 점수
-     *
-     * 이미지에서는 evedence_sufficiency_score로 보이는데,
-     * 오타라면 evidence_sufficiency_score로 수정하는 것을 추천합니다.
-     */
     @Column(name = "evidence_sufficiency_score", nullable = false)
     private Double evidenceSufficiencyScore;
 
-    /**
-     * 근거 자료의 최신성 점수
-     */
     @Column(name = "recency_score", nullable = false)
     private Double recencyScore;
 
-    /**
-     * 반박 근거에 따른 감점
-     */
     @Column(name = "contradiction_penalty", nullable = false)
     private Double contradictionPenalty;
 
     /**
-     * 최종 신뢰도 점수
+     * 소주장별 최종 점수
      */
     @Column(name = "final_score", nullable = false)
     private Double finalScore;
@@ -101,7 +85,7 @@ public class ScoreBreakdown {
 
     @Builder
     private ScoreBreakdown(
-        AnalysisResult analysisResult,
+        ClaimAnalysisResult claimAnalysisResult,
         Double officialConsistencyScore,
         Double evidenceRelevanceScore,
         Double evidenceSufficiencyScore,
@@ -109,7 +93,7 @@ public class ScoreBreakdown {
         Double contradictionPenalty,
         Double finalScore
     ) {
-        this.analysisResult = analysisResult;
+        this.claimAnalysisResult = claimAnalysisResult;
         this.officialConsistencyScore = officialConsistencyScore;
         this.evidenceRelevanceScore = evidenceRelevanceScore;
         this.evidenceSufficiencyScore = evidenceSufficiencyScore;
