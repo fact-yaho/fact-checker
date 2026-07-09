@@ -10,16 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AnalysisResultRepository extends JpaRepository<AnalysisResult, UUID> {
 
-    Optional<AnalysisResult> findFirstByClaimIdAndAnalysisStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
-        UUID claimId,
-        AnalysisStatus analysisStatus
-    );
-
-    List<AnalysisResult> findAllByClaimIdInAndAnalysisStatusAndDeletedAtIsNullOrderByCreatedAtDesc(
-        List<UUID> claimIds,
-        AnalysisStatus analysisStatus
-    );
-
     List<AnalysisResult> findAllByUserIdAndDeletedAtIsNullOrderByCreatedAtDesc(
         UUID userId,
         Pageable pageable

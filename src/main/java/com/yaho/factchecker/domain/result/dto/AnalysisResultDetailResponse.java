@@ -11,11 +11,9 @@ import java.util.UUID;
 public record AnalysisResultDetailResponse(
     UUID id,
     UUID userId,
-    UUID claimId,
 
     InputType inputType,
     String originalInput,
-    String claimText,
     String sourceUrl,
 
     Double finalScore,
@@ -31,22 +29,18 @@ public record AnalysisResultDetailResponse(
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
 
-    ScoreBreakdownResponse scoreBreakdown,
-    List<AnalysisEvidenceResponse> evidences
+    List<ClaimAnalysisResultResponse> claimResults
 ) {
 
     public static AnalysisResultDetailResponse of(
         AnalysisResult result,
-        ScoreBreakdownResponse scoreBreakdown,
-        List<AnalysisEvidenceResponse> evidences
+        List<ClaimAnalysisResultResponse> claimResults
     ) {
         return new AnalysisResultDetailResponse(
             result.getId(),
             result.getUserId(),
-            result.getClaimId(),
             result.getInputType(),
             result.getOriginalInput(),
-            result.getClaimText(),
             result.getSourceUrl(),
             result.getFinalScore(),
             result.getVerdict(),
@@ -58,8 +52,7 @@ public record AnalysisResultDetailResponse(
             result.getScoringVersion(),
             result.getCreatedAt(),
             result.getUpdatedAt(),
-            scoreBreakdown,
-            evidences
+            claimResults
         );
     }
 }
