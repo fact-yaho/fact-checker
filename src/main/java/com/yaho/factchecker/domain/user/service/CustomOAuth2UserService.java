@@ -9,6 +9,7 @@ import com.yaho.factchecker.domain.user.service.oauth.OAuth2UserInfo;
 import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
@@ -25,6 +26,8 @@ import java.util.UUID;
 public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserRequest, OAuth2User>{
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest)  throws OAuth2AuthenticationException {
         OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
@@ -79,11 +82,17 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
 
                     String uniqueNickname = safeName + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
 
+                    //Oauth 사용자를 위한 임시 랜덤 비밀
+                    String randomRawPassword = UUID.randomUUID().toString();
+                    String encodedPassword = passwordEncoder.encode(randomRawPassword);
+
+
                     User newUser =User.builder()
                             .email(email)
                             .name(safeName)
                             .nickname(uniqueNickname) // 구글 이름을 기본 닉네임으로 설정 예시
                             .role(Role.USER) // 기본 역할 설정
+                            .password(encodedPassword)// 임시 랜덤 비밀번호 설정
                             .build();
                     return userRepository.save(newUser);
                 });

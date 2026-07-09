@@ -61,7 +61,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
     // ✉️ 네이버 SMTP 메일 발송을 위한 라이브러리
     implementation 'org.springframework.boot:spring-boot-starter-mail'
-
+    //keycloak
+    implementation 'org.keycloak:keycloak-admin-client:24.0.5'
 
 
 
