@@ -65,36 +65,49 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
            throw new OAuth2AuthenticationException("이메일 정보를 가져올 수 없습니다. 이메일 제공 동의가 필요합니다.");
        }
 
-       User user = saveOrUpate(email, name);
+       User user = saveOrUpdate(email, name);
 
         return new PrincipalDetails(user, attributes);
     }
 
-    private User saveOrUpate(String email, String name){
+    private User saveOrUpdate(String email, String name){
 
         return userRepository.findByEmail(email)
-                .map(entity->entity)
+                .map(entity -> {
+                    // 🎯 [수정] .peek 대신 .map 내부에서 기존 유저 로그를 남깁니다.
+                    log.info("기존 사용자 로그인 성공: {}", email);
+                    return entity;
+                })
                 .orElseGet(()->{
+                    try {
+                        log.info("새로운 OAuth 사용자 생성 시작: email={}, name={}", email, name);
+                        
+                        String shortUuid = UUID.randomUUID().toString().substring(0, 8); // 8자리 UUID 생성
+                        // 이름 누락시 방어 코드
+                        String safeName = (name != null && !name.isBlank()) ? name : "user";
 
-                    String shortUuid = UUID.randomUUID().toString().substring(0, 8); // 8자리 UUID 생성
-                    // 이름 누락시 방어 코드
-                    String safeName = (name != null && !name.isBlank()) ? name : "user";
+                        String uniqueNickname = safeName + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
 
-                    String uniqueNickname = safeName + "_" + shortUuid; // 닉네임에 UUID를 붙여서 고유하게 만듦
+                        //Oauth 사용자를 위한 임시 랜덤 비밀번호
+                        String randomRawPassword = UUID.randomUUID().toString();
+                        String encodedPassword = passwordEncoder.encode(randomRawPassword);
 
-                    //Oauth 사용자를 위한 임시 랜덤 비밀
-                    String randomRawPassword = UUID.randomUUID().toString();
-                    String encodedPassword = passwordEncoder.encode(randomRawPassword);
-
-
-                    User newUser =User.builder()
-                            .email(email)
-                            .name(safeName)
-                            .nickname(uniqueNickname) // 구글 이름을 기본 닉네임으로 설정 예시
-                            .role(Role.USER) // 기본 역할 설정
-                            .password(encodedPassword)// 임시 랜덤 비밀번호 설정
-                            .build();
-                    return userRepository.save(newUser);
+                        User newUser = User.builder()
+                                .email(email)
+                                .name(safeName)
+                                .nickname(uniqueNickname)
+                                .role(Role.USER)
+                                .password(encodedPassword)
+                                .build();
+                        
+                        User savedUser = userRepository.save(newUser);
+                        log.info("새로운 OAuth 사용자 생성 완료: email={}, nickname={}", email, uniqueNickname);
+                        return savedUser;
+                    } catch (Exception e) {
+                        log.error("OAuth 사용자 생성 중 오류 발생: email={}", email, e);
+                        // 🎯 OAuth2AuthenticationException 생성자에 맞게 예외 처리 변경
+                        throw new OAuth2AuthenticationException("사용자 등록 중 오류가 발생했습니다: " + e.getMessage());
+                    }
                 });
     }
 

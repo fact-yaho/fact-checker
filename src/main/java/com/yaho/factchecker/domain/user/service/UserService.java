@@ -8,7 +8,6 @@ import com.yaho.factchecker.domain.user.entity.Role;
 import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
-import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.keycloak.admin.client.Keycloak;
@@ -25,6 +24,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import javax.ws.rs.core.Response;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
@@ -50,7 +50,7 @@ public class UserService {
 
     /* 1. 회원가입 로직 */
     @Transactional
-        public UUID signUp(SignUpRequest request) {
+    public UUID signUp(SignUpRequest request) {
 
         // 새로운 유저 엔티티 생성 기본값 유저
         User user = new User(
@@ -59,7 +59,6 @@ public class UserService {
                 request.getName(),
                 Role.USER,
                 request.getNickname()
-
         );
         // 변수선언
         User savedUser;
@@ -67,50 +66,70 @@ public class UserService {
         // 로컬 db 저장
         try {
             savedUser = userRepository.save(user);
-            log.info("로컬 DB 유저 회원가입 성공: {}", request.getEmail());
+            log.info("✅ 로컬 DB 유저 회원가입 성공: {}", request.getEmail());
         } catch (DataIntegrityViolationException e) {
+            log.error("❌ 로컬 DB 저장 실패 - 중복된 이메일: {}", request.getEmail());
             throw new IllegalArgumentException("Email already exists : 이미 존재하는 이메일입니다 " + request.getEmail());
         }
 
-
-//  [Keycloak 유저 동기화 생성]
+        //  [Keycloak 유저 동기화 생성]
         try {
+            log.info("🔄 Keycloak 유저 생성 시작: {}", request.getEmail());
+            
             // 1) Keycloak 유저 기본 프로필 정의
             UserRepresentation keycloakUser = new UserRepresentation();
             keycloakUser.setUsername(request.getEmail()); // 로그인 ID로 이메일 사용
             keycloakUser.setEmail(request.getEmail());
-            keycloakUser.setFirstName(request.getName()); // 필요한 프로필 추가 매핑
+            keycloakUser.setFirstName(request.getName());
             keycloakUser.setEnabled(true);
-            keycloakUser.setEmailVerified(true); // 이미 메일 인증 절차를 거쳤으므로 true 처리
+            keycloakUser.setEmailVerified(true);
 
-            // 2) Keycloak 내부 로그인 패스워드 설정 (암호화되지 않은 원본 비밀번호 전달)
+            // 2) Keycloak 내부 로그인 패스워드 설정
             CredentialRepresentation credential = new CredentialRepresentation();
             credential.setType(CredentialRepresentation.PASSWORD);
-            credential.setValue(request.getPassword()); // Keycloak 내부 저장소에서 암호화하여 보관됨
+            credential.setValue(request.getPassword());
             credential.setTemporary(false);
             keycloakUser.setCredentials(Collections.singletonList(credential));
 
             // 3) Keycloak Admin API 호출하여 유저 생성
-            Response response = keycloakAdminClient.realm(realm).users().create(keycloakUser);
-
-            if (response.getStatus() == 201) {
-                log.info("Keycloak 서버 유저 동기화 성공: {}", request.getEmail());
-            } else {
-                // 🔥 Keycloak이 왜 400을 내뱉었는지 상세한 "진짜 이유"를 바디에서 읽어옵니다.
-                String errorBody = response.readEntity(String.class);
-                log.error("❌ Keycloak 유저 생성 실패! 상태 코드: {}", response.getStatus());
-                log.error("❌ Keycloak 서버가 보낸 에러 메시지: {}", errorBody);
-
-                throw new RuntimeException("인증 서버 등록 실패. 사유: " + errorBody);
+            Response response = null;
+            try {
+                log.info("📡 Keycloak Admin API 호출 - Realm: {}, Email: {}", realm, request.getEmail());
+                response = keycloakAdminClient.realm(realm).users().create(keycloakUser);
+                
+                int statusCode = response.getStatus();
+                log.info("📊 Keycloak 응답 상태 코드: {}", statusCode);
+                
+                if (statusCode == 201) {
+                    log.info("✅ Keycloak 서버 유저 동기화 성공: {}", request.getEmail());
+                } else {
+                    String errorBody = response.readEntity(String.class);
+                    log.error("❌ Keycloak 유저 생성 실패! 상태 코드: {}", statusCode);
+                    log.error("❌ Keycloak 서버 에러 응답: {}", errorBody);
+                    
+                    // 로컬 DB에서 롤백
+                    userRepository.delete(savedUser);
+                    throw new RuntimeException("Keycloak 사용자 생성 실패 (상태코드: " + statusCode + "): " + errorBody);
+                }
+            } finally {
+                if (response != null) {
+                    response.close();
+                }
             }
         } catch (Exception e) {
+            log.error("❌ Keycloak 동기화 중 예외 발생: {}", e.getMessage(), e);
             // Keycloak 동기화 실패 시 로컬 DB에서 롤백 처리
-            userRepository.delete(savedUser);
-            log.error("Keycloak 유저 동기화 실패로 로컬 DB 롤백 처리: {}", request.getEmail());
-            throw new RuntimeException("Keycloak 서버와의 통신에 실패했습니다. 사유: " + e.getMessage(), e);
+            try {
+                userRepository.delete(savedUser);
+                log.info("🔄 로컬 DB 롤백 완료: {}", request.getEmail());
+            } catch (Exception rollbackError) {
+                log.error("❌ 롤백 실패: {}", rollbackError.getMessage());
+            }
+            throw new RuntimeException("Keycloak 서버와의 통신에 실패했습니다. 자세한 사유: " + e.getMessage(), e);
         }
+        
+        log.info("✅ 회원가입 완료: {}", request.getEmail());
         return savedUser.getId();
-
     }
 
     /* 2. 회원 삭제 로직 */

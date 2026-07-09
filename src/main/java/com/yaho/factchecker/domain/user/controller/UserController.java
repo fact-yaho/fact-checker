@@ -34,8 +34,19 @@ public class UserController {
     // 1. 회원가입 API
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody SignUpRequest request) {
+        try {
+            log.info("📝 회원가입 요청 수신: {}", request.getEmail());
             UUID userId = userService.signUp(request);
-        return ResponseEntity.ok("회원가입 완료. 유저 ID: " + userId);
+            log.info("✅ 회원가입 성공: {}", userId);
+            return ResponseEntity.ok("회원가입 완료. 유저 ID: " + userId);
+        } catch (IllegalArgumentException e) {
+            log.error("⚠️ 잘못된 요청: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (RuntimeException e) {
+            log.error("❌ 회원가입 중 오류 발생: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("회원가입 실패: " + e.getMessage());
+        }
     }
 
     // 2. 회원탈퇴 API

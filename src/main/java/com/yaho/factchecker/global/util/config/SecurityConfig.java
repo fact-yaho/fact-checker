@@ -1,16 +1,16 @@
 package com.yaho.factchecker.global.util.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaho.factchecker.domain.user.service.CustomOAuth2UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.client.RestTemplate;
 
@@ -50,6 +50,8 @@ public class SecurityConfig {
                         // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/users/signup","/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
+                        // 정적 리소스 요청 무시
+                        .requestMatchers("/favicon.ico", "/favicon.png", "/*.css", "/*.js").permitAll()
                         .requestMatchers("/api/v1/users/send-verification").permitAll()
                         .requestMatchers("/api/v1/users/verify-code").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
@@ -73,19 +75,24 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
     public RestTemplate restTemplate() {
         // 요청 팩토리 생성
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         // 타임아웃 10초
         factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
-        // 타임아웃 팩토리 설정 반환
-        return new RestTemplate(factory);
+        
+        RestTemplate restTemplate = new RestTemplate(factory);
+        
+        // Jackson ObjectMapper 설정 - unknown 필드 무시
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        
+        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
+        converter.setObjectMapper(objectMapper);
+        
+        restTemplate.getMessageConverters().add(0, converter);
+        return restTemplate;
     }
 
 
