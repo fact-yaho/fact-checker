@@ -8,7 +8,6 @@ import java.util.UUID;
 
 public record AnalysisResultSummaryResponse(
     UUID id,
-    UUID claimId,
     String questionSummary,
     Double finalScore,
     Verdict verdict,
@@ -19,7 +18,6 @@ public record AnalysisResultSummaryResponse(
     public static AnalysisResultSummaryResponse from(AnalysisResult result) {
         return new AnalysisResultSummaryResponse(
             result.getId(),
-            result.getClaimId(),
             result.getQuestionSummary(),
             result.getFinalScore(),
             result.getVerdict(),

@@ -8,9 +8,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ScoreBreakdownRepository extends JpaRepository<ScoreBreakdown, UUID> {
 
-    Optional<ScoreBreakdown> findByAnalysisResultIdAndDeletedAtIsNull(UUID analysisResultId);
+    Optional<ScoreBreakdown> findByClaimAnalysisResultIdAndDeletedAtIsNull(
+        UUID claimAnalysisResultId
+    );
 
-    List<ScoreBreakdown> findAllByAnalysisResultIdInAndDeletedAtIsNull(
-        List<UUID> analysisResultIds
+    List<ScoreBreakdown> findAllByClaimAnalysisResultIdInAndDeletedAtIsNull(
+        List<UUID> claimAnalysisResultIds
     );
 }

@@ -7,15 +7,21 @@ import java.util.UUID;
 
 public record CreateAnalysisResultCommand(
     UUID userId,
-    UUID claimId,
 
     InputType inputType,
     String originalInput,
-    String claimText,
     String sourceUrl,
 
+    /**
+     * 소주장별 점수를 종합한 최종 점수
+     */
     Double finalScore,
+
+    /**
+     * 소주장별 판정을 종합한 최종 판정
+     */
     Verdict verdict,
+
     String questionSummary,
     String answerSummary,
     String explanation,
@@ -23,7 +29,6 @@ public record CreateAnalysisResultCommand(
     String modelVersion,
     String scoringVersion,
 
-    List<CreateAnalysisEvidenceCommand> evidences,
-    CreateScoreBreakdownCommand scoreBreakdown
+    List<CreateClaimAnalysisResultCommand> claimResults
 ) {
 }
