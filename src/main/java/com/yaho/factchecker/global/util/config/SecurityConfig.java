@@ -45,18 +45,19 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
-                        //로그인 화면(/login)과 회원가입 화면(/signup)
-                        .requestMatchers("/login", "/signup").permitAll()
-                        // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
-                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
-                        .requestMatchers("/api/v1/users/signup","/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
-                        // 정적 리소스 요청 무시
-                        .requestMatchers("/favicon.ico", "/favicon.png", "/*.css", "/*.js").permitAll()
-                        .requestMatchers("/api/v1/users/send-verification").permitAll()
-                        .requestMatchers("/api/v1/users/verify-code").permitAll()
-                        .requestMatchers("/api/v1/auth/login").permitAll()
-                        .requestMatchers("/api/v1/fact-checks").permitAll()
-                        .anyRequest().authenticated()
+                                //로그인 화면(/login)과 회원가입 화면(/signup)
+                                .requestMatchers("/login", "/signup").permitAll()
+                                // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
+                                .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                                .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname", "/api/v1/users/check-email").permitAll()
+
+                                .requestMatchers(org.springframework.boot.autoconfigure.security.servlet.PathRequest.toStaticResources().atCommonLocations()).permitAll()
+                                .requestMatchers("/favicon.ico", "/error", "/css/**", "/js/**", "/images/**").permitAll()
+                                .requestMatchers("/api/v1/users/send-verification").permitAll()
+                                .requestMatchers("/api/v1/users/verify-code").permitAll()
+                                .requestMatchers("/api/v1/auth/login").permitAll()
+                                .requestMatchers("/api/v1/fact-checks").permitAll()
+                                .anyRequest().authenticated()
                 )
                 // OAuth2 로그인 설정
                 .oauth2Login(oauth2 -> oauth2
@@ -81,20 +82,19 @@ public class SecurityConfig {
         // 타임아웃 10초
         factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
-        
+
         RestTemplate restTemplate = new RestTemplate(factory);
-        
+
         // Jackson ObjectMapper 설정 - unknown 필드 무시
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        
+
         MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
         converter.setObjectMapper(objectMapper);
-        
+
         restTemplate.getMessageConverters().add(0, converter);
         return restTemplate;
     }
-
 
 
 }
