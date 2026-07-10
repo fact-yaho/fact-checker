@@ -8,6 +8,7 @@ import lombok.Builder;
 @Builder
 public record FactCheckStartResponse(
         UUID factCheckId,
-        List<ClaimResponse> claims
+        List<ClaimResponse> claims,
+        List<ClaimStanceResponse> stanceResults
 ) {
 }
