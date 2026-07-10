@@ -31,6 +31,7 @@ public class SecurityConfig {
                                 "/api/v1/users/signup",
                                 "/api/v1/users/check-email",
                                 "/api/v1/users/check-nickname",
+                                "/api/v1/fact-checks",
                                 "/oauth2/**",
                                 "/login/oauth2/**"
                         )
