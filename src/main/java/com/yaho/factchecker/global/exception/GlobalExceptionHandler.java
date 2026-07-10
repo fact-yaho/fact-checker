@@ -45,11 +45,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
         ErrorCode errorCode = ErrorCode.INTERNAL_SERVER_ERROR;
 
+        log.error("❌ [글로벌 예외 발생] 진짜 원인 본체: {}", e.getMessage(), e);
+
         log.error("서버 예외 발생", e);
 
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ErrorResponse.from(errorCode));
-    }
 
+
+
+
+    }
 }

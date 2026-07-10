@@ -196,8 +196,13 @@ public class UserService {
                     ((Number) responseBody.get("expires_in")).longValue()
             );
         } catch (Exception e) {
+            // 🎯 진짜 Keycloak 에러 원인을 콘솔에 강제로 출력하는 로그 추가!
+            log.error("❌ Keycloak 통신 중 진짜 발생한 에러 원인: {}", e.getMessage(), e);
+
             throw new IllegalArgumentException("인증 서버와의 통신에 실패했거나 계정 정보가 올바르지 않습니다.", e);
         }
+
+
     }
 
     // 6. 마이페이지

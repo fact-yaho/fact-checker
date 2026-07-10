@@ -273,8 +273,8 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    localStorage.setItem('token', data.token);
-                    window.location.href = '/dashboard';
+                    localStorage.setItem('token', data.accesstoken);
+                    window.location.href = '/';
                 } else {
                     const error = await response.json();
                     showError(error.message || '로그인에 실패했습니다.');
