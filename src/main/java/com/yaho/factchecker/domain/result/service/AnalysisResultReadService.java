@@ -81,6 +81,18 @@ public class AnalysisResultReadService {
         return toDetailResponse(result);
     }
 
+    public AnalysisResultDetailResponse getResultDetail(UUID resultId) {
+        validateResultId(resultId);
+
+        AnalysisResult result = analysisResultRepository
+            .findByIdAndDeletedAtIsNull(resultId)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "분석 결과를 찾을 수 없습니다. resultId=" + resultId
+            ));
+
+        return toDetailResponse(result);
+    }
+
     /**
      * 단일 claim_id 기준으로 가장 최근 완료된 소주장 분석 결과를 조회합니다.
      *

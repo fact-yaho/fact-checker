@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/fact-checks").permitAll()
+                        .requestMatchers("/api/v1/results/histories/*").permitAll()
                         .anyRequest().authenticated()
                 )
                 // OAuth2 로그인 설정 추가

@@ -59,14 +59,11 @@ public class AnalysisResultHistoryController {
      * 결과 본문, 점수 상세, 근거 목록을 함께 반환합니다.
      */
     @GetMapping("/histories/{resultId}")
-    public ResponseEntity<AnalysisResultDetailResponse> getMyResultDetail(
-        @AuthenticationPrincipal Object principal,
+    public ResponseEntity<AnalysisResultDetailResponse> getResultDetail(
         @PathVariable UUID resultId
     ) {
-        UUID userId = extractUserId(principal);
-
         AnalysisResultDetailResponse response =
-            analysisResultReadService.getUserResultDetail(userId, resultId);
+            analysisResultReadService.getResultDetail(resultId);
 
         return ResponseEntity.ok(response);
     }
