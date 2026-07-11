@@ -4,6 +4,7 @@ import com.yaho.factchecker.domain.user.service.CustomOAth2UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -50,7 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/users/signup", "/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
                         .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/api/v1/fact-checks").permitAll()
-                        .requestMatchers("/api/v1/results/histories/*").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/v1/results/histories/*").permitAll()
                         .anyRequest().authenticated()
                 )
                 // OAuth2 로그인 설정 추가
