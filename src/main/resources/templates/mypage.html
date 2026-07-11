@@ -1,132 +1,108 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>팩트체커 - 마이페이지</title>
-    <style>
-        body { font-family: sans-serif; background: #f4f6f9; padding: 50px; display: flex; justify-content: center; }
-        .profile-card { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        .profile-group { margin-bottom: 20px; }
-        .profile-group label { font-weight: bold; color: #666; display: block; margin-bottom: 5px; }
-        .profile-group div { font-size: 18px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .logout-btn { width: 100%; padding: 10px; background: #ff4d4d; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 20px; }
-        .withdraw-btn { width: 100%; padding: 10px; background: #ccc; color: #333; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마이페이지 · 외교 팩트체커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/common.js"></script>
 </head>
-<body>
+<body class="min-h-screen bg-paper text-ink antialiased">
 
-<div class="profile-card">
-    <h2>마이페이지 👤</h2>
-    <hr style="margin-bottom: 20px;">
+  <header id="nav" class="bg-white border-b border-line sticky top-0 z-40"></header>
 
-    <div class="profile-group">
-        <label>이메일</label>
-        <div id="my-email">로딩 중...</div>
+  <main class="mx-auto max-w-[560px] px-5 py-10 sm:py-12">
+    <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink mb-6">마이페이지</h1>
+
+    <section class="bg-white rounded-xl2 shadow-card border border-line overflow-hidden">
+      <div class="p-6 sm:p-7 flex items-center gap-4 border-b border-line">
+        <div id="avatar" class="grid place-items-center w-16 h-16 rounded-2xl bg-brand-50 text-brand text-2xl font-extrabold">·</div>
+        <div class="min-w-0">
+          <p id="p-nickname" class="text-lg font-extrabold text-ink truncate">불러오는 중…</p>
+          <p id="p-email" class="text-sm text-slate-500 truncate">—</p>
+        </div>
+      </div>
+      <dl class="divide-y divide-line">
+        <div class="flex items-center justify-between px-6 sm:px-7 py-4"><dt class="text-sm font-semibold text-slate-400">이메일</dt><dd id="d-email" class="text-sm font-bold text-ink-2">—</dd></div>
+        <div class="flex items-center justify-between px-6 sm:px-7 py-4"><dt class="text-sm font-semibold text-slate-400">이름</dt><dd id="d-name" class="text-sm font-bold text-ink-2">—</dd></div>
+        <div class="flex items-center justify-between px-6 sm:px-7 py-4"><dt class="text-sm font-semibold text-slate-400">닉네임</dt><dd id="d-nickname" class="text-sm font-bold text-ink-2">—</dd></div>
+      </dl>
+    </section>
+
+    <div class="mt-5 grid gap-3">
+      <a href="/history" class="flex items-center justify-between rounded-xl2 bg-white border border-line shadow-card px-5 py-4 hover:border-brand/60 transition group">
+        <span class="flex items-center gap-3"><span class="grid place-items-center w-9 h-9 rounded-lg bg-brand-50 text-brand text-lg"><i class="ti ti-folder" aria-hidden="true"></i></span><span class="text-sm font-bold text-ink">내 검증 기록 보기</span></span>
+        <i class="ti ti-chevron-right text-slate-300 group-hover:text-brand transition text-lg" aria-hidden="true"></i>
+      </a>
+      <button type="button" id="logoutBtn" class="rounded-xl2 bg-white border border-line shadow-card px-5 py-4 text-sm font-bold text-ink-2 hover:border-slate-300 transition text-left inline-flex items-center gap-3">
+        <span class="grid place-items-center w-9 h-9 rounded-lg bg-slate-100 text-slate-500 text-lg"><i class="ti ti-logout" aria-hidden="true"></i></span> 로그아웃
+      </button>
     </div>
-    <div class="profile-group">
-        <label>이름</label>
-        <div id="my-name">로딩 중...</div>
+
+    <div class="mt-8 pt-6 border-t border-line">
+      <button type="button" id="withdrawBtn" class="text-sm font-semibold text-red-500 hover:text-red-600 hover:underline transition">회원 탈퇴</button>
+      <p class="mt-1.5 text-xs text-slate-400">탈퇴하면 계정과 검증 기록이 모두 삭제되며 복구할 수 없어요.</p>
     </div>
-    <div class="profile-group">
-        <label>닉네임</label>
-        <div id="my-nickname">로딩 중...</div>
+  </main>
+
+  <div id="modal" class="fixed inset-0 z-50 hidden" style="background:rgba(22,34,58,.5);backdrop-filter:blur(3px)">
+    <div class="min-h-full flex items-center justify-center p-5">
+      <div class="w-full max-w-sm bg-white rounded-xl2 shadow-pop p-6">
+        <p class="text-lg font-extrabold text-ink">정말 탈퇴하시겠어요?</p>
+        <p class="mt-2 text-sm text-slate-500 leading-relaxed">계정과 모든 검증 기록이 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없어요.</p>
+        <div class="mt-6 flex gap-2">
+          <button type="button" id="cancelWithdraw" class="flex-1 rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-ink hover:bg-slate-200 transition">취소</button>
+          <button type="button" id="confirmWithdraw" class="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 transition disabled:opacity-60">탈퇴하기</button>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <button class="logout-btn" onclick="logout()">로그아웃</button>
-    <button class="withdraw-btn" onclick="withdrawAccount()">회원 탈퇴</button>
-</div>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const Y = window.Yaho;
+      const $ = (id) => document.getElementById(id);
+      Y.Auth.captureUrlToken();
+      Y.renderNav(null);
+      if (!Y.Auth.requireLogin("/mypage")) return;
 
-<script>
-    document.addEventListener("DOMContentLoaded", async () => {
-        // 🎯 1. [추가] 구글 로그인 성공 후 주소창에 들어온 token 파라미터가 있는지 먼저 확인합니다.
-        const urlParams = new URLSearchParams(window.location.search);
-        const tokenFromUrl = urlParams.get('token');
-
-        // 🎯 2. [추가] 만약 주소창에 토큰이 있다면, 로컬 스토리지에 저장하고 주소창을 깔끔하게 비웁니다.
-        if (tokenFromUrl) {
-            localStorage.setItem('token', tokenFromUrl);
-            // 브라우저 주소창에서 '?token=...' 부분을 지우고 원래의 '/mypage' 주소만 남깁니다.
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        // 3. 로컬 스토리지에서 최종 토큰 꺼내기
-        const token = localStorage.getItem('token');
-
-        // 토큰이 없으면 로그인 페이지로 튕겨내기
-        if (!token) {
-            alert("로그인이 필요한 페이지입니다.");
-            window.location.href = '/login';
-            return;
-        }
-
+      (async () => {
         try {
-            // 4. 백엔드 마이프로필 API 호출
-            const response = await fetch('/api/v1/users/me', {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                const user = await response.json();
-                // 5. 화면에 유저 정보 바인딩
-                document.getElementById('my-email').textContent = user.email;
-                document.getElementById('my-name').textContent = user.name;
-                document.getElementById('my-nickname').textContent = user.nickname;
-            } else {
-                alert("인증이 만료되었습니다. 다시 로그인해 주세요.");
-                localStorage.removeItem('token');
-                window.location.href = '/login';
-            }
-        } catch (error) {
-            console.error("프로필 로딩 에러:", error);
-            alert("서버 연결 오류가 발생했습니다.");
+          const me = await Y.apiJson("/api/v1/users/me");
+          $("p-nickname").textContent = me.nickname || me.name || "사용자";
+          $("p-email").textContent = me.email || "";
+          $("d-email").textContent = me.email || "—";
+          $("d-name").textContent = me.name || "—";
+          $("d-nickname").textContent = me.nickname || "—";
+          const seed = (me.nickname || me.name || "?").trim();
+          $("avatar").textContent = seed ? seed[0].toUpperCase() : "·";
+        } catch (err) {
+          if (err.status === 401 || err.status === 403) { Y.Auth.clear(); location.href = `/login?returnUrl=${encodeURIComponent("/mypage")}`; return; }
+          Y.toast(err.message || "정보를 불러오지 못했어요.", true);
         }
+      })();
+
+      $("logoutBtn").addEventListener("click", () => Y.Auth.logout());
+
+      const modal = $("modal");
+      const close = () => modal.classList.add("hidden");
+      $("withdrawBtn").addEventListener("click", () => modal.classList.remove("hidden"));
+      $("cancelWithdraw").addEventListener("click", close);
+      modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+      $("confirmWithdraw").addEventListener("click", async (e) => {
+        e.target.disabled = true; e.target.textContent = "처리 중…";
+        try {
+          const res = await Y.api("/api/v1/users", { method: "DELETE" });
+          if (!res.ok) throw new Error(await Y.safeMessage(res));
+          Y.Auth.clear();
+          Y.toast("탈퇴가 완료됐어요. 이용해 주셔서 감사합니다.");
+          setTimeout(() => (location.href = "/"), 800);
+        } catch (err) { close(); Y.toast(err.message || "탈퇴 처리 중 오류가 발생했어요.", true); e.target.disabled = false; e.target.textContent = "탈퇴하기"; }
+      });
     });
-
-    // 1. 로그아웃 처리 함수
-    function logout() {
-        localStorage.removeItem('token');
-        alert("로그아웃 되었습니다.");
-        window.location.href = '/login';
-    }
-
-    // 2. 회원 탈퇴 처리 함수
-    async function withdrawAccount() {
-        const confirmWithdraw = confirm("정말로 탈퇴하시겠습니까?\n탈퇴 시 모든 정보가 복구 불가능하게 삭제됩니다.");
-        if (!confirmWithdraw) return;
-
-        const token = localStorage.getItem('token');
-        if (!token) {
-            alert("로그인 정보가 없습니다.");
-            window.location.href = '/login';
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/v1/users', {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            if (response.ok) {
-                alert("회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.");
-                localStorage.removeItem('token');
-                window.location.href = '/login';
-            } else {
-                const errorText = await response.text();
-                alert("탈퇴 처리 중 오류가 발생했습니다: " + errorText);
-            }
-        } catch (error) {
-            console.error("탈퇴 요청 에러:", error);
-            alert("서버 연결 오류가 발생했습니다.");
-        }
-    }
-</script>
+  </script>
 </body>
 </html>

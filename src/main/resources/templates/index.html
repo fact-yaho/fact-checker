@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>외교 팩트체커 · 공공데이터 기반 신뢰도 검증</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/common.js"></script>
+</head>
+<body class="min-h-screen bg-paper text-ink antialiased">
+
+  <header id="nav" class="bg-white border-b border-line sticky top-0 z-40"></header>
+
+  <main class="mx-auto max-w-page px-5">
+
+    <section class="pt-16 pb-8 sm:pt-20 text-center">
+      <p class="text-sm font-bold text-brand mb-3">공공데이터포털 · 외교부 공식자료 대조</p>
+      <h1 class="text-3xl sm:text-[42px] font-extrabold leading-[1.25] tracking-tight text-ink break-keep">
+        외교 관련 주장,<br>
+        <span class="text-brand">공식자료 기준으로</span> 검증해보세요
+      </h1>
+      <p class="mt-4 text-slate-500 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed break-keep text-balance">
+        주장이나 뉴스 문장을 입력하면 AI가 외교부·정부 공식 API와 대조해 신뢰도와 근거를 정리해 드립니다.
+      </p>
+    </section>
+
+    <section class="max-w-3xl mx-auto">
+      <div class="bg-white rounded-xl2 shadow-card border border-line p-5 sm:p-6">
+        <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2 text-[12.5px] text-amber-900 leading-relaxed">
+          <i class="ti ti-info-circle text-[15px] mt-px flex-none" aria-hidden="true"></i>
+          <span>이 서비스는 <b>외교부 공식 자료(공공데이터포털 API)</b>만 근거로 검증해요. 외교부 자료에 관련 내용이 없으면 실제로는 사실이어도 <b>'근거 부족'으로 나올 수 있어요.</b></span>
+        </div>
+        <label for="claim" class="flex items-center gap-2 text-sm font-bold text-ink mb-3">
+          <i class="ti ti-message-2-search text-brand text-base" aria-hidden="true"></i> 확인할 주장 또는 뉴스 내용
+        </label>
+        <div class="relative">
+          <textarea id="claim" rows="4" maxlength="1000"
+            class="w-full resize-y rounded-xl border border-line bg-slate-50/70 px-4 py-3.5 pr-16 text-[15px] leading-relaxed text-ink placeholder:text-slate-400 focus:bg-white focus:border-brand transition"
+            placeholder="예) 한국은 ○○국과 외교관계를 단절하고 대사관도 철수했다."></textarea>
+          <span id="counter" class="absolute right-3 bottom-3 text-xs text-slate-300 tnum">0 / 1,000</span>
+        </div>
+        <div class="mt-3.5 flex items-center justify-between gap-3 flex-wrap">
+          <div id="examples" class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-semibold text-slate-400">예시</span>
+            <button type="button" class="ex-chip">한국은 ○○국과 단교했다.</button>
+            <button type="button" class="ex-chip">한국과 ○○국은 협정을 체결했다.</button>
+            <button type="button" class="ex-chip">외교부가 ○○를 직접 언급한 적이 있다.</button>
+          </div>
+          <button id="submitBtn" type="button"
+            class="inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-white hover:bg-brand-700 active:scale-[.99] transition disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="ti ti-sparkles" aria-hidden="true"></i> 신뢰도 측정 시작
+          </button>
+        </div>
+        <div class="mt-3 space-y-1.5">
+          <p class="text-xs text-slate-500 flex items-start gap-1.5">
+            <i class="ti ti-bulb text-sm mt-px flex-none" style="color:#D97706" aria-hidden="true"></i>
+            <span><b class="text-slate-600">질문("~인가요?")보다 "~했다 / ~이다" 서술형 주장</b>으로 입력하면 더 정확하게 검증돼요. 예: "한국은 ○○국과 단교했다."</span>
+          </p>
+          <p class="text-xs text-slate-400 flex items-center gap-1.5">
+            <i class="ti ti-info-circle text-sm" aria-hidden="true"></i> 한 문장에 여러 주장이 섞여 있어도 자동으로 나눠 검증합니다.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="max-w-page mx-auto mt-6">
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="how"><div class="how__top"><span class="how__ic"><i class="ti ti-file-search" aria-hidden="true"></i></span><span class="how__n">01</span></div><h3 class="how__t">주장 분해</h3><p class="how__d">검증 가능한 주장 단위로 정제·분류합니다.</p></div>
+        <div class="how"><div class="how__top"><span class="how__ic"><i class="ti ti-database-search" aria-hidden="true"></i></span><span class="how__n">02</span></div><h3 class="how__t">공식 근거 대조</h3><p class="how__d">외교부 공공 API에서 근거를 찾아 교차 확인합니다.</p></div>
+        <div class="how"><div class="how__top"><span class="how__ic"><i class="ti ti-chart-bar" aria-hidden="true"></i></span><span class="how__n">03</span></div><h3 class="how__t">신뢰도·근거 제공</h3><p class="how__d">점수와 근거 자료를 보고서로 정리해 보여줍니다.</p></div>
+      </div>
+
+      <div class="bg-white rounded-xl2 border border-line p-5 sm:p-6 mt-3">
+        <div class="flex items-center gap-2 mb-3.5">
+          <i class="ti ti-award text-[17px]" style="color:#B7852A" aria-hidden="true"></i>
+          <h2 class="text-sm font-bold text-ink">신뢰할 수 있는 공식 데이터로 검증합니다</h2>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div class="src"><span class="src__ic"><i class="ti ti-world" aria-hidden="true"></i></span><div><div class="src__t">국가·지역별 관계</div><div class="src__s">양자관계 · 수교·단교</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-news" aria-hidden="true"></i></span><div><div class="src__t">주요정세 정보</div><div class="src__s">국제정세·다자외교</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-file-certificate" aria-hidden="true"></i></span><div><div class="src__t">주요협정 정보</div><div class="src__s">조약·협정 체결</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-flag" aria-hidden="true"></i></span><div><div class="src__t">북한과의 관계</div><div class="src__s">대북관계</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-building-bank" aria-hidden="true"></i></span><div><div class="src__t">외교부 보도자료</div><div class="src__s">공식 발표·논평</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-microphone" aria-hidden="true"></i></span><div><div class="src__t">외교부 연설문</div><div class="src__s">장관·대변인 발언</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-users" aria-hidden="true"></i></span><div><div class="src__t">주요인사 교류</div><div class="src__s">고위급 교류·정상외교</div></div></div>
+          <div class="src"><span class="src__ic"><i class="ti ti-businessplan" aria-hidden="true"></i></span><div><div class="src__t">무역관계</div><div class="src__s">통상·경제외교</div></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-line py-8 mt-16">
+    <div class="mx-auto max-w-page px-5 text-xs text-slate-400 leading-relaxed">
+      본 서비스의 판정은 공개된 공공데이터포털 API 및 정부 공식자료를 기준으로 합니다. 비공개 내부 검토나 향후 발표 가능성은 판단에 포함하지 않습니다.
+    </div>
+  </footer>
+
+  <div id="overlay" class="fixed inset-0 z-50 hidden" style="background:rgba(22,34,58,.55);backdrop-filter:blur(3px)">
+    <div class="min-h-full flex items-center justify-center p-5">
+      <div class="w-full max-w-md rounded-xl2 bg-white shadow-pop p-7">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="spin"></span>
+          <div>
+            <p class="font-extrabold text-ink text-[17px]">검증하고 있어요</p>
+            <p class="text-xs text-slate-400">공식 자료와 대조하는 중입니다. 잠시만 기다려 주세요.</p>
+          </div>
+        </div>
+        <ol id="steps" class="space-y-3.5">
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-file-text text-[13px]"></i></span><span class="step__label text-sm text-slate-400">주장 분석</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-database-search text-[13px]"></i></span><span class="step__label text-sm text-slate-400">공식 자료 검색</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-scale text-[13px]"></i></span><span class="step__label text-sm text-slate-400">근거 입장 판단</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-calculator text-[13px]"></i></span><span class="step__label text-sm text-slate-400">신뢰도 산정</span></li>
+        </ol>
+        <div id="waitNotice" class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
+          <p class="flex items-start gap-1.5"><i class="ti ti-clock-hour-4 text-[14px] mt-px flex-none" aria-hidden="true"></i>
+            <span>검증에는 <b>최대 몇 분</b>이 걸릴 수 있어요.<span id="waitGuest"> <b>비회원은 이 화면을 벗어나면 검색 결과를 다시 확인할 수 없어요.</b> 결과를 저장하려면 <a href="/signup" class="font-bold underline hover:text-amber-950">회원가입</a>을 권장해요.</span></span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .ex-chip { font-size: 12.5px; font-weight: 600; color: #475569; background: #F1F5F9; border: 1px solid #E2E8F0; padding: 6px 11px; border-radius: 999px; transition: all .15s ease; }
+    .ex-chip:hover { border-color: #2563EB; color: #2563EB; background: #EFF4FF; }
+    .how { background: #fff; border: 1px solid #E6EAF0; border-radius: 14px; padding: 18px; }
+    .how__top { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+    .how__ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #EFF4FF; color: #2563EB; font-size: 18px; }
+    .how__n { font-size: 12px; font-weight: 800; color: #2563EB; }
+    .how__t { font-size: 15px; font-weight: 700; color: #16223A; }
+    .how__d { font-size: 12.5px; color: #64748B; margin-top: 4px; line-height: 1.5; }
+    .src { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #EEF2F7; border-radius: 10px; }
+    .src__ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: #F1F5F9; color: #475569; font-size: 16px; flex: none; }
+    .src__t { font-size: 13px; font-weight: 700; color: #16223A; }
+    .src__s { font-size: 11px; color: #94A3B8; }
+  </style>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const Y = window.Yaho;
+      Y.renderNav("home");
+
+      const claim = document.getElementById("claim");
+      const counter = document.getElementById("counter");
+      const submitBtn = document.getElementById("submitBtn");
+      const overlay = document.getElementById("overlay");
+      const steps = [...document.querySelectorAll("#steps .step")];
+
+      // 결과 페이지 "재시도" → 같은 질문 자동 검증
+      const retryQ = sessionStorage.getItem("factyaho:retry");
+      if (retryQ) {
+        sessionStorage.removeItem("factyaho:retry");
+        claim.value = retryQ;
+        counter.textContent = `${claim.value.length} / 1,000`;
+      }
+      // 로그인 회원은 비회원 경고 문구 숨김(대기 시간 안내는 유지)
+      if (Y.Auth.isLoggedIn) { const g = document.getElementById("waitGuest"); if (g) g.remove(); }
+
+      claim.addEventListener("input", () => { counter.textContent = `${claim.value.length} / 1,000`; });
+
+      document.getElementById("examples").addEventListener("click", (e) => {
+        const chip = e.target.closest(".ex-chip");
+        if (!chip) return;
+        claim.value = chip.textContent.trim();
+        counter.textContent = `${claim.value.length} / 1,000`;
+        claim.focus();
+      });
+
+      let stepTimer = null, cur = 0;
+      function advanceSteps() {
+        steps.forEach((s) => s.classList.remove("is-active", "is-done"));
+        cur = 0;
+        const tick = () => {
+          steps.forEach((s, i) => { s.classList.toggle("is-done", i < cur); s.classList.toggle("is-active", i === cur); });
+          if (cur < steps.length - 1) { cur++; stepTimer = setTimeout(tick, 1700); }
+        };
+        tick();
+      }
+
+      async function submit() {
+        const text = claim.value.trim();
+        if (!text) { Y.toast("확인할 내용을 입력해 주세요.", true); claim.focus(); return; }
+        submitBtn.disabled = true;
+        overlay.classList.remove("hidden");
+        advanceSteps();
+        try {
+          const res = await Y.apiJson("/api/v1/fact-checks", { method: "POST", body: JSON.stringify({ inputText: text }) });
+          // 새 응답: 결과 상세 전체 → stash 후 렌더 / 옛 응답: analysisResultId 만
+          let id;
+          if (res && (res.verdict || res.claimResults)) { Y.Result.stash(res); id = res.id; }
+          else if (res && res.analysisResultId) { id = res.analysisResultId; }
+          if (!id) throw new Error("결과를 받지 못했어요.");
+          steps.forEach((s) => s.classList.add("is-done"));
+          setTimeout(() => { location.href = `/result?id=${encodeURIComponent(id)}`; }, 350);
+        } catch (err) {
+          clearTimeout(stepTimer);
+          overlay.classList.add("hidden");
+          submitBtn.disabled = false;
+          const msg = (err.status === 401 || err.status === 403)
+            ? "검증 요청이 거부됐어요. 서버 접근 설정을 확인해 주세요."
+            : (err.message || "검증에 실패했어요. 잠시 후 다시 시도해 주세요.");
+          Y.toast(msg, true);
+        }
+      }
+
+      submitBtn.addEventListener("click", submit);
+      claim.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submit(); });
+
+      if (retryQ) submit();
+    });
+  </script>
+</body>
+</html>

@@ -102,6 +102,25 @@ public class UserService {
 
                 if (statusCode == 201) {
                     log.info("✅ Keycloak 서버 유저 동기화 성공: {}", request.getEmail());
+                } else if (statusCode == 409) {
+                    // 재가입 케이스: 탈퇴 후 Keycloak에 남은 유령 유저 → 삭제하고 재생성.
+                    // (로컬은 unique 제약으로 방금 새로 저장됐으므로 Keycloak 잔존분은 100% 유령)
+                    log.warn("⚠️ Keycloak 409 감지 → 유령 유저 정리 후 재생성: {}", request.getEmail());
+                    keycloakAdminClient.realm(realm).users().search(request.getEmail()).stream()
+                            .filter(u -> request.getEmail().equalsIgnoreCase(u.getEmail())
+                                    || request.getEmail().equalsIgnoreCase(u.getUsername()))
+                            .findFirst()
+                            .ifPresent(u -> keycloakAdminClient.realm(realm).users().get(u.getId()).remove());
+
+                    try (Response retry = keycloakAdminClient.realm(realm).users().create(keycloakUser)) {
+                        if (retry.getStatus() == 201) {
+                            log.info("✅ 유령 유저 정리 후 Keycloak 재생성 성공: {}", request.getEmail());
+                        } else {
+                            String eb = retry.readEntity(String.class);
+                            userRepository.delete(savedUser);
+                            throw new RuntimeException("Keycloak 재생성 실패 (상태코드: " + retry.getStatus() + "): " + eb);
+                        }
+                    }
                 } else {
                     String errorBody = response.readEntity(String.class);
                     log.error("❌ Keycloak 유저 생성 실패! 상태 코드: {}", statusCode);
@@ -135,12 +154,29 @@ public class UserService {
     /* 2. 회원 삭제 로직 */
     @Transactional
     public void deleteUser(String email) {
-        // 1. 이메일로 유저가 존재하는지 먼저 확인 겸 엔티티 가져오기
+        // 1. 이메일로 유저 존재 확인 겸 엔티티 가져오기
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다. 이메일: " + email));
 
-        // 2. 찾아온 유저의 진짜 고유 ID로 확실하게 삭제 진행
+        // 2. [중요] Keycloak 유저 먼저 삭제 (username=email). 안 지우면 재가입 시 409 "User exists" 충돌.
+        //    여기서 실패하면 아래 로컬 삭제도 롤백되어 정합성 유지.
+        try {
+            keycloakAdminClient.realm(realm).users().search(email).stream()
+                    .filter(u -> email.equalsIgnoreCase(u.getEmail())
+                            || email.equalsIgnoreCase(u.getUsername()))
+                    .findFirst()
+                    .ifPresentOrElse(u -> {
+                        keycloakAdminClient.realm(realm).users().get(u.getId()).remove();
+                        log.info("✅ Keycloak 유저 삭제 완료: {}", email);
+                    }, () -> log.warn("⚠️ Keycloak에 삭제할 유저 없음(이미 없음): {}", email));
+        } catch (Exception e) {
+            log.error("❌ Keycloak 유저 삭제 실패: {}", e.getMessage(), e);
+            throw new RuntimeException("Keycloak 회원 정보 삭제에 실패했습니다: " + e.getMessage(), e);
+        }
+
+        // 3. 로컬 DB 삭제
         userRepository.deleteById(user.getId());
+        log.info("✅ 회원 탈퇴 완료(로컬+Keycloak): {}", email);
     }
 
     /* 3. 이메일 중복 체크 */
@@ -317,5 +353,42 @@ public class UserService {
         }
     }
 
+    /* 비밀번호 재설정 (로컬 DB + Keycloak 동기화) */
+    @Transactional
+    public void resetPassword(String email, String newRawPassword) {
+        // 1. 로컬 유저 확인
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다: " + email));
+
+        // 2. 로컬 DB 비밀번호 갱신 (BCrypt)
+        user.updatePassword(passwordEncoder.encode(newRawPassword));
+        userRepository.save(user);
+        log.info("✅ 로컬 DB 비밀번호 갱신 완료: {}", email);
+
+        // 3. Keycloak 비밀번호 갱신 — 없으면 생성, 있으면 리셋
+        try {
+            createKeycloakUserIfNotExists(email, user.getName(), newRawPassword);
+
+            CredentialRepresentation credential = new CredentialRepresentation();
+            credential.setType(CredentialRepresentation.PASSWORD);
+            credential.setValue(newRawPassword);
+            credential.setTemporary(false);
+
+            keycloakAdminClient.realm(realm).users().search(email)
+                    .stream()
+                    .findFirst()
+                    .ifPresentOrElse(
+                            userRep -> {
+                                keycloakAdminClient.realm(realm).users().get(userRep.getId()).resetPassword(credential);
+                                log.info("✅ Keycloak 비밀번호 갱신 완료: {}", email);
+                            },
+                            () -> log.error("❌ Keycloak에서 유저를 찾을 수 없습니다: {}", email)
+                    );
+        } catch (Exception e) {
+            log.error("❌ Keycloak 비밀번호 동기화 실패: {}", e.getMessage(), e);
+            // 인증서버 갱신 실패 시 RuntimeException → 트랜잭션 롤백 → 로컬 비번도 원복(불일치 방지)
+            throw new RuntimeException("인증 서버 비밀번호 갱신에 실패했습니다: " + e.getMessage(), e);
+        }
+    }
 
 }

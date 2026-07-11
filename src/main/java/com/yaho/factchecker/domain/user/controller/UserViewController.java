@@ -22,4 +22,10 @@ public class UserViewController {
     @GetMapping("/mypage")
     public String myPage()  { return "mypage";}
 
+    // http://localhost:8080/reset-password
+    @GetMapping("/reset-password")
+    public String resetPasswordPage() {
+        return "reset-password";
+    }
+
 }

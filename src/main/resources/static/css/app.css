@@ -1,0 +1,72 @@
+/* ==========================================================================
+   팩트 야호 · 공통 스타일 (라이트 테마)
+   대부분 Tailwind(Play CDN) + Tabler 아이콘으로 처리하고,
+   여기엔 폰트·포커스·로더·토스트 등 최소한만 둡니다.
+   ========================================================================== */
+
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+:root { --brand: #2563EB; }
+
+html { -webkit-text-size-adjust: 100%; }
+body { font-feature-settings: "ss01"; }
+
+/* 숫자는 계기판처럼 고정폭 */
+.tnum { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+/* 키보드 포커스 */
+a:focus-visible, button:focus-visible, input:focus-visible,
+textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* 줄임 (Tailwind line-clamp 미로드 대비) */
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 로더 */
+.spin {
+  width: 18px; height: 18px;
+  border: 2.5px solid rgba(37,99,235,.2);
+  border-top-color: var(--brand);
+  border-radius: 999px;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 진행 스텝 */
+.step__mark {
+  width: 22px; height: 22px; border-radius: 999px; flex: none;
+  display: grid; place-items: center;
+  border: 2px solid #E2E8F0; color: #94A3B8; background: #fff;
+  transition: all .35s ease;
+}
+.step.is-active .step__mark { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 0 4px rgba(37,99,235,.10); }
+.step.is-done .step__mark { border-color: var(--brand); background: var(--brand); color: #fff; }
+.step.is-active .step__label { color: #16223A; font-weight: 700; }
+.step.is-done .step__label { color: #475569; }
+
+/* 진입 애니메이션 */
+.reveal { opacity: 0; transform: translateY(8px); animation: reveal .5s cubic-bezier(.22,1,.36,1) forwards; }
+@keyframes reveal { to { opacity: 1; transform: none; } }
+
+/* 점수 바 채움 애니메이션 */
+.bar-fill { transition: width .8s cubic-bezier(.22,1,.36,1); }
+
+/* 토스트 */
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+  background: #16223A; color: #fff; padding: 12px 18px; border-radius: 12px;
+  font-size: 14px; font-weight: 600; box-shadow: 0 12px 30px -12px rgba(0,0,0,.4);
+  opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; z-index: 60;
+  max-width: min(90vw, 420px);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.err { background: #B91C1C; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  .bar-fill { transition: none; }
+}

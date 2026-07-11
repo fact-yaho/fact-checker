@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>검증 기록 · 외교 팩트체커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/common.js"></script>
+</head>
+<body class="min-h-screen bg-paper text-ink antialiased">
+
+  <header id="nav" class="bg-white border-b border-line sticky top-0 z-40"></header>
+
+  <main class="mx-auto max-w-page px-5 py-8 sm:py-10">
+    <div class="flex items-end justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink">검증 기록</h1>
+        <p class="mt-1.5 text-sm text-slate-500">이전에 검증한 주장과 판정을 다시 확인할 수 있어요.</p>
+      </div>
+      <a href="/" class="hidden sm:inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-700 transition"><i class="ti ti-plus" aria-hidden="true"></i> 새 검증하기</a>
+    </div>
+
+    <div id="loading" class="rounded-xl2 border border-line bg-white p-10 text-center shadow-card">
+      <div class="inline-flex items-center gap-3 text-slate-500"><span class="spin"></span><span class="font-semibold">기록을 불러오는 중…</span></div>
+    </div>
+
+    <div id="state" class="hidden rounded-xl2 border border-line bg-white p-12 text-center shadow-card">
+      <p id="stateIcon" class="text-3xl mb-3 text-slate-300"><i class="ti ti-folder"></i></p>
+      <p id="stateTitle" class="text-lg font-extrabold text-ink"></p>
+      <p id="stateMsg" class="mt-1.5 text-sm text-slate-500"></p>
+      <div id="stateActions" class="mt-5"></div>
+    </div>
+
+    <ul id="list" class="hidden space-y-3"></ul>
+
+    <div id="moreWrap" class="hidden mt-5 text-center">
+      <button id="moreBtn" type="button" class="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-5 py-3 text-sm font-bold text-ink-2 hover:border-brand hover:text-brand transition">
+        <span id="moreLabel">더 보기</span>
+      </button>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const Y = window.Yaho;
+      Y.renderNav("history");
+      if (!Y.Auth.requireLogin("/history")) return;
+
+      const $ = (id) => document.getElementById(id);
+      const SIZE = 10;
+      let page = 0, loading = false, done = false;
+
+      $("moreBtn").addEventListener("click", () => loadPage());
+
+      // 기록 삭제 (카드 우측 휴지통 버튼)
+      $("list").addEventListener("click", (e) => {
+        const btn = e.target.closest(".del-btn");
+        if (!btn) return;
+        e.preventDefault();
+        const card = btn.closest("[data-card]");
+        confirmDelete(() => deleteResult(btn.dataset.id, card));
+      });
+
+      loadPage(true);
+
+      function showState(icon, title, msg, actions) {
+        $("loading").classList.add("hidden");
+        $("stateIcon").innerHTML = `<i class="ti ${icon}"></i>`;
+        $("stateTitle").textContent = title;
+        $("stateMsg").textContent = msg || "";
+        $("stateActions").innerHTML = actions || "";
+        $("state").classList.remove("hidden");
+      }
+
+      function confirmDelete(onConfirm) {
+        Y.showModal({
+          title: `<p class="text-[15px] font-extrabold text-ink flex items-center gap-2"><i class="ti ti-trash text-red-500" aria-hidden="true"></i> 검증 기록 삭제</p>`,
+          bodyHtml: `
+            <p class="text-[14px] text-ink-2 leading-relaxed">이 검증 기록을 삭제할까요?<br>삭제하면 <b class="text-ink">되돌릴 수 없어요.</b></p>
+            <div class="mt-6 flex justify-end gap-2">
+              <button type="button" data-close class="px-4 py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-ink hover:bg-slate-200 transition">취소</button>
+              <button type="button" data-confirm class="px-4 py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 transition">삭제</button>
+            </div>`
+        });
+        const modal = document.getElementById("yaho-modal");
+        const ok = modal && modal.querySelector("[data-confirm]");
+        if (ok) ok.addEventListener("click", () => { Y.closeModal(); onConfirm(); });
+      }
+
+      async function deleteResult(id, card) {
+        try {
+          await Y.apiJson(`/api/v1/results/histories/${encodeURIComponent(id)}`, { method: "DELETE" });
+          if (card) card.remove();
+          Y.toast("검증 기록을 삭제했어요.");
+          if (!$("list").querySelector("[data-card]")) {
+            $("list").classList.add("hidden");
+            $("moreWrap").classList.add("hidden");
+            showState("ti-folder-open", "아직 검증 기록이 없어요", "첫 검증을 시작하면 여기에서 다시 확인할 수 있어요.",
+              `<a href="/" class="inline-flex px-5 py-3 rounded-xl bg-brand text-white text-sm font-bold hover:bg-brand-700 transition">첫 검증하기</a>`);
+          }
+        } catch (err) {
+          if (err.status === 401) { Y.Auth.clear(); location.href = `/login?returnUrl=${encodeURIComponent("/history")}`; return; }
+          Y.toast(err.message || "삭제하지 못했어요. 잠시 후 다시 시도해 주세요.", true);
+        }
+      }
+
+      function rowHtml(item) {
+        const info = Y.verdictInfo(item.verdict);
+        const failed = item.analysisStatus === "FAILED";
+        const scoreBlock = Y.isUnscored(item.verdict)
+          ? `<p class="text-2xl font-extrabold text-slate-300">—</p><p class="text-[11px] text-slate-400 font-semibold">미산정</p>`
+          : `<p class="tnum text-2xl font-extrabold" style="color:${info.tone}">${Y.scoreText(item.finalScore)}</p><p class="text-[11px] text-slate-400 font-semibold">/ 100</p>`;
+        return `<li class="relative" data-card data-id="${Y.esc(item.id)}">
+          <a href="/result?id=${encodeURIComponent(item.id)}" class="group flex items-center gap-4 bg-white border border-line rounded-2xl pl-4 pr-14 py-4 hover:border-slate-300 hover:shadow-card transition">
+            <span class="grid place-items-center flex-none w-11 h-11 rounded-xl text-white" style="background:${info.tone};font-size:20px"><i class="ti ${info.icon}"></i></span>
+            <div class="flex-1 min-w-0">
+              <p class="text-[15px] font-bold text-ink leading-snug clamp-2">${Y.esc(item.questionSummary) || "제목 없는 검증"}</p>
+              <div class="mt-1.5 flex items-center gap-2 text-xs text-slate-400 flex-wrap">
+                <span style="color:${info.tone};font-weight:700">${Y.esc(info.label)}</span>
+                <span class="text-slate-300">·</span>
+                <span>${Y.fmtDateTime(item.createdAt)}</span>
+                ${failed ? `<span class="text-red-500 font-semibold">· 분석 실패</span>` : ""}
+              </div>
+            </div>
+            <div class="text-right flex-none">${scoreBlock}</div>
+          </a>
+          <button type="button" class="del-btn absolute top-1/2 -translate-y-1/2 right-3 grid place-items-center w-9 h-9 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 transition" data-id="${Y.esc(item.id)}" aria-label="이 검증 기록 삭제" title="삭제">
+            <i class="ti ti-trash text-[18px]" aria-hidden="true"></i>
+          </button>
+        </li>`;
+      }
+
+      async function loadPage(first) {
+        if (loading || done) return;
+        loading = true;
+        $("moreLabel").textContent = "불러오는 중…";
+        try {
+          const q = `?page=${page}&size=${SIZE}&sort=createdAt,desc`;
+          const items = await Y.apiJson(`/api/v1/results/histories${q}`);
+          const arr = Array.isArray(items) ? items : [];
+          if (first && arr.length === 0) {
+            showState("ti-folder-open", "아직 검증 기록이 없어요", "첫 검증을 시작하면 여기에서 다시 확인할 수 있어요.",
+              `<a href="/" class="inline-flex px-5 py-3 rounded-xl bg-brand text-white text-sm font-bold hover:bg-brand-700 transition">첫 검증하기</a>`);
+            return;
+          }
+          $("loading").classList.add("hidden");
+          $("list").classList.remove("hidden");
+          $("list").insertAdjacentHTML("beforeend", arr.map(rowHtml).join(""));
+          page += 1;
+          if (arr.length < SIZE) { done = true; $("moreWrap").classList.add("hidden"); }
+          else { $("moreWrap").classList.remove("hidden"); }
+        } catch (err) {
+          if (err.status === 401 || err.status === 403) { Y.Auth.clear(); location.href = `/login?returnUrl=${encodeURIComponent("/history")}`; return; }
+          if (first) showState("ti-alert-triangle", "불러오지 못했어요", err.message || "잠시 후 다시 시도해 주세요.",
+            `<button onclick="location.reload()" class="inline-flex px-5 py-3 rounded-xl bg-brand text-white text-sm font-bold hover:bg-brand-700 transition">다시 시도</button>`);
+          else Y.toast(err.message || "더 불러오지 못했어요.", true);
+        } finally { loading = false; $("moreLabel").textContent = "더 보기"; }
+      }
+    });
+  </script>
+</body>
+</html>

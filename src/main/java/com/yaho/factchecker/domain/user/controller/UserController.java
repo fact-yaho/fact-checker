@@ -97,9 +97,10 @@ public class UserController {
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body("이메일 값이 비어있습니다.");
         }
+        String purpose = request.getOrDefault("purpose", "signup"); // "signup" | "reset"
 
         try {
-            emailService.sendVerificationEmail(email);
+            emailService.sendVerificationEmail(email, purpose);   // ← purpose 전달
             return ResponseEntity.ok("네이버 메일로 인증 코드가 발송되었습니다. 메일함을 확인하세요!");
         } catch (Exception e) {
             log.error("이메일 인증 코드 발송 중 서버 에러 발생: ", e);
@@ -190,5 +191,37 @@ public class UserController {
         }
 
         return email;
+    }
+
+    // 비밀번호 재설정 API (이메일 인증코드 검증 후 새 비밀번호로 변경)
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String code = request.get("code");
+        String newPassword = request.get("newPassword");
+
+        if (email == null || email.isBlank()
+                || code == null || code.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("이메일, 인증 코드, 새 비밀번호를 모두 입력해 주세요.");
+        }
+
+        String cleanEmail = email.replace("\"", "").trim();
+
+        // 1. 이메일 인증코드 검증 (회원가입과 동일한 흐름 재사용, 성공 시 코드 소모)
+        if (!emailService.verifyCode(cleanEmail, code)) {
+            return ResponseEntity.badRequest().body("인증 코드가 올바르지 않거나 만료되었습니다.");
+        }
+
+        // 2. 로컬 + Keycloak 비밀번호 갱신
+        try {
+            userService.resetPassword(cleanEmail, newPassword.trim());
+            return ResponseEntity.ok("비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            log.error("❌ 비밀번호 재설정 실패: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("비밀번호 재설정 중 오류가 발생했습니다.");
+        }
     }
 }
