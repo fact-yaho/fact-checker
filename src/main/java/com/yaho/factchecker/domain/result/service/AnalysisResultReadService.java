@@ -69,7 +69,6 @@ public class AnalysisResultReadService {
         UUID userId,
         UUID resultId
     ) {
-        validateUserId(userId);
         validateResultId(resultId);
 
         AnalysisResult result = analysisResultRepository
