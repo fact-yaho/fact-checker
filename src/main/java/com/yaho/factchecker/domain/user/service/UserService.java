@@ -214,4 +214,70 @@ public class UserService {
         // 엔티티를  반환
         return new MyPageResponse(user);
     }
+
+    // 🎯 소셜 로그인 성공 유저를 위한 JWT 토큰 발급 로직
+    public String generateTokenForOAuth(String email) {
+        // 1. DB에서 해당 이메일을 가진 유저가 있는지 확인합니다.
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다: " + email));
+
+        // 소셜 유저가 우회 로그인할 수 있도록 임시 공통 패스워드 키 설정
+        String oauthTemporaryPassword = "OAUTH_BYPASS_SECRET_KEY_123!";
+
+        try {
+            log.info("🔄 소셜 로그인 사용자의 Keycloak 자격 증명 동기화 설정 시작: {}", email);
+
+            // 2. 💡 Keycloak Admin Client를 활용하여, 해당 유저의 Keycloak 비밀번호를 임시 키로 강제 업데이트(원격 제어)합니다.
+            org.keycloak.representations.idm.CredentialRepresentation credential = new org.keycloak.representations.idm.CredentialRepresentation();
+            credential.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
+            credential.setValue(oauthTemporaryPassword);
+            credential.setTemporary(false);
+
+            // Keycloak 내부의 유저를 찾아 비밀번호를 즉시 변경시킵니다.
+            keycloakAdminClient.realm(realm).users().search(email)
+                    .stream()
+                    .findFirst()
+                    .ifPresent(userRep -> {
+                        keycloakAdminClient.realm(realm).users().get(userRep.getId()).resetPassword(credential);
+                        log.info("✅ Keycloak 원격 유저 패스워드 동기화 성공 (비밀번호 검증 우회)");
+                    });
+
+        } catch (Exception e) {
+            log.warn("⚠️ Keycloak 유저 패스워드 동기화 중 경고 발생 (기존 가입 계정 검증): {}", e.getMessage());
+        }
+
+        // 3. 💡 동기화된 비밀번호를 활용해 일반 로그인과 완벽히 동일한 'factchecker-client' 토큰을 정식 요청합니다.
+        String url = keycloakAuthServerUrl + "/realms/factchecker/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("grant_type", "password");
+        params.add("client_id", "factchecker-client");
+        params.add("username", user.getEmail());
+        params.add("password", oauthTemporaryPassword); // 동기화시킨 비밀번호 전달
+
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, headers);
+
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    org.springframework.http.HttpMethod.POST,
+                    requestEntity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> responseBody = response.getBody();
+
+            if (responseBody != null && responseBody.containsKey("access_token")) {
+                log.info("🚀 [성공] 소셜 로그인 유저 전용 정식 Access Token 발급 완료");
+                return (String) responseBody.get("access_token");
+            }
+            throw new IllegalArgumentException("Keycloak 토큰 응답에 access_token이 누락되었습니다.");
+        } catch (Exception e) {
+            log.error("❌ 소셜 로그인용 정식 토큰 발행 최종 실패: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("인증 서버로부터 유저 토큰을 발행하는 데 실패했습니다.", e);
+        }
+    }
 }

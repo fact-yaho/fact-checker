@@ -2,7 +2,9 @@ package com.yaho.factchecker.global.util.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaho.factchecker.domain.user.service.CustomOAuth2UserService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -11,12 +13,12 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+@Slf4j
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -24,50 +26,39 @@ public class SecurityConfig {
     @Autowired
     private CustomOAuth2UserService customOAuth2UserService;
 
+    // 🎯 순환 참조 방지를 위해 ApplicationContext를 동적으로 활용합니다.
+    @Autowired
+    private ApplicationContext applicationContext;
+
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
         return (web) -> web.ignoring()
-                .requestMatchers("/favicon.ico", "/favicon.png", "/error");
+                .requestMatchers(
+                        "/favicon.ico", "/favicon.png", "/error",
+                        "/css/**", "/js/**", "/images/**"
+                );
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf
-                        .ignoringRequestMatchers(
-                                "/api/v1/users/signup",
-                                "/api/v1/users/check-email",
-                                "/api/v1/users/check-nickname",
-                                "/api/v1/users/send-verification",
-                                "/api/v1/users/verify-code",
-                                "/api/v1/auth/login",
-                                "/oauth2/**",
-                                "/login/oauth2/**"
-                        )
-                )
-                .cors(cors -> cors.disable())
-
-                // 세션정책
+                // CSRF 보호 비활성화 (개발 편의성)
+                .csrf(csrf -> csrf.disable())
+                // H2 콘솔 사용을 위한 프레임 옵션 설정
+                .headers(headers -> headers.frameOptions(frame -> frame.disable()))
+                // 세션 설정: 필요 시 세션 생성 (Stateful 방식 유지)
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
                 )
-
+                // URL별 권한 설정
                 .authorizeHttpRequests(auth -> auth
-
-                        .requestMatchers("/", "/css/**", "/js/**", "/images/**").permitAll()
-                        //로그인 화면(/login)과 회원가입 화면(/signup)
-                        .requestMatchers("/login", "/signup").permitAll()
-                        // 회원 가입전 필수 검증 api 세트와 Oauth api 전체
-                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
-                        .requestMatchers("/api/v1/users/signup","/api/v1/users/check-nickname","/api/v1/users/check-email").permitAll()
-                        // 정적 리소스 요청 무시
-                        .requestMatchers(org.springframework.boot.autoconfigure.security.servlet.PathRequest.toStaticResources().atCommonLocations()).permitAll()
-                        .requestMatchers("/favicon.ico", "/error", "/css/**", "/js/**", "/images/**").permitAll()
-                        .requestMatchers("/api/v1/users/send-verification").permitAll()
-                        .requestMatchers("/api/v1/users/verify-code").permitAll()
-                        .requestMatchers("/api/v1/auth/login").permitAll()
-                        .requestMatchers("/api/v1/fact-checks").permitAll()
+                        .requestMatchers("/", "/login", "/signup", "/api/v1/auth/login", "/api/v1/users/signup", "/mypage").permitAll()
                         .anyRequest().authenticated()
+                )
+                // 일반 폼 로그인 설정
+                .formLogin(form -> form
+                        .loginPage("/login")
+                        .permitAll()
                 )
                 // OAuth2 로그인 설정
                 .oauth2Login(oauth2 -> oauth2
@@ -76,8 +67,29 @@ public class SecurityConfig {
                                 .userService(customOAuth2UserService)
                         )
                         .successHandler((request, response, authentication) -> {
-                            response.sendRedirect("/");
-                        })                )
+                            org.springframework.security.oauth2.core.user.OAuth2User oAuth2User =
+                                    (org.springframework.security.oauth2.core.user.OAuth2User) authentication.getPrincipal();
+
+                            String email = (String) oAuth2User.getAttributes().get("email");
+                            if (email == null || email.isBlank()) {
+                                email = (String) oAuth2User.getAttributes().get("preferred_username");
+                            }
+
+                            log.info("🎯 OAuth2 소셜 로그인 성공! 추출된 이메일: {}", email);
+
+                            // 🎯 런타임 시점에 ApplicationContext에서 UserService 빈을 직접 꺼내와 심볼 에러와 순환 참조를 동시에 해결합니다.
+                            com.yaho.factchecker.domain.user.service.UserService currentUserService =
+                                    applicationContext.getBean(com.yaho.factchecker.domain.user.service.UserService.class);
+
+                            // 토큰 발급 메서드 호출
+                            String realToken = currentUserService.generateTokenForOAuth(email);
+
+                            log.info("🚀 실제 소셜 토큰 생성 완료. 마이페이지로 파라미터를 실어 리다이렉트합니다.");
+
+                            // 쿼리 스트링으로 발급된 진짜 JWT 토큰을 주소창에 매핑해서 전송
+                            response.sendRedirect("/mypage?token=" + realToken);
+                        })
+                )
                 // jwt 리소스 서버 설정
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(Customizer.withDefaults())
@@ -93,20 +105,17 @@ public class SecurityConfig {
         // 타임아웃 10초
         factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
         factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
-        
+
         RestTemplate restTemplate = new RestTemplate(factory);
-        
+
         // Jackson ObjectMapper 설정 - unknown 필드 무시
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        
+
         MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
         converter.setObjectMapper(objectMapper);
-        
+
         restTemplate.getMessageConverters().add(0, converter);
         return restTemplate;
     }
-
-
-
 }

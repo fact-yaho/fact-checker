@@ -17,4 +17,9 @@ public class UserViewController {
     public String signupPage() {
         return "signup";
     }
+
+    //https://localhost:8080/mypage
+    @GetMapping("/mypage")
+    public String myPage()  { return "mypage";}
+
 }
