@@ -24,7 +24,11 @@ public class KakaoUserInfo implements OAuth2UserInfo {
 
     @Override
     public String getName() {
-        return properties != null ? (String) properties.get("nickname") : null;
+        Object id=attributes.get("id");
+        if(id != null) {
+            return "kakao" + id.toString();
+        }
+        return null;
     }
 
     @Override

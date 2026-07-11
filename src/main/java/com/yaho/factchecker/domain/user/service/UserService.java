@@ -9,6 +9,10 @@ import com.yaho.factchecker.domain.user.entity.User;
 import com.yaho.factchecker.domain.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpEntity;
@@ -20,8 +24,12 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import javax.ws.rs.core.Response;
+import java.util.Collections;
 import java.util.Map;
+import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -30,16 +38,19 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate;
+    private final Keycloak keycloakAdminClient;
 
     @Value("${keycloak.auth-server-url}")
     private String keycloakAuthServerUrl;
 
     @Value("${keycloak.client-id}")
     private String keycloakClientId;
+    @Value("${keycloak.realm:factchecker}")
+    private String realm;
 
     /* 1. 회원가입 로직 */
     @Transactional
-    public Long signUp(SignUpRequest request) {
+    public UUID signUp(SignUpRequest request) {
 
         // 새로운 유저 엔티티 생성 기본값 유저
         User user = new User(
@@ -48,15 +59,77 @@ public class UserService {
                 request.getName(),
                 Role.USER,
                 request.getNickname()
-
         );
+        // 변수선언
+        User savedUser;
+
+        // 로컬 db 저장
         try {
-            User savedUser = userRepository.save(user);
-            return savedUser.getId();
-        }catch (DataIntegrityViolationException e){
-            throw new IllegalArgumentException("Email already exists : 이미 존재하는 이메일입니다"+request.getEmail());
+            savedUser = userRepository.save(user);
+            log.info("✅ 로컬 DB 유저 회원가입 성공: {}", request.getEmail());
+        } catch (DataIntegrityViolationException e) {
+            log.error("❌ 로컬 DB 저장 실패 - 중복된 이메일: {}", request.getEmail());
+            throw new IllegalArgumentException("Email already exists : 이미 존재하는 이메일입니다 " + request.getEmail());
         }
 
+        //  [Keycloak 유저 동기화 생성]
+        try {
+            log.info("🔄 Keycloak 유저 생성 시작: {}", request.getEmail());
+            
+            // 1) Keycloak 유저 기본 프로필 정의
+            UserRepresentation keycloakUser = new UserRepresentation();
+            keycloakUser.setUsername(request.getEmail()); // 로그인 ID로 이메일 사용
+            keycloakUser.setEmail(request.getEmail());
+            keycloakUser.setFirstName(request.getName());
+            keycloakUser.setEnabled(true);
+            keycloakUser.setEmailVerified(true);
+
+            // 2) Keycloak 내부 로그인 패스워드 설정
+            CredentialRepresentation credential = new CredentialRepresentation();
+            credential.setType(CredentialRepresentation.PASSWORD);
+            credential.setValue(request.getPassword());
+            credential.setTemporary(false);
+            keycloakUser.setCredentials(Collections.singletonList(credential));
+
+            // 3) Keycloak Admin API 호출하여 유저 생성
+            Response response = null;
+            try {
+                log.info("📡 Keycloak Admin API 호출 - Realm: {}, Email: {}", realm, request.getEmail());
+                response = keycloakAdminClient.realm(realm).users().create(keycloakUser);
+                
+                int statusCode = response.getStatus();
+                log.info("📊 Keycloak 응답 상태 코드: {}", statusCode);
+                
+                if (statusCode == 201) {
+                    log.info("✅ Keycloak 서버 유저 동기화 성공: {}", request.getEmail());
+                } else {
+                    String errorBody = response.readEntity(String.class);
+                    log.error("❌ Keycloak 유저 생성 실패! 상태 코드: {}", statusCode);
+                    log.error("❌ Keycloak 서버 에러 응답: {}", errorBody);
+                    
+                    // 로컬 DB에서 롤백
+                    userRepository.delete(savedUser);
+                    throw new RuntimeException("Keycloak 사용자 생성 실패 (상태코드: " + statusCode + "): " + errorBody);
+                }
+            } finally {
+                if (response != null) {
+                    response.close();
+                }
+            }
+        } catch (Exception e) {
+            log.error("❌ Keycloak 동기화 중 예외 발생: {}", e.getMessage(), e);
+            // Keycloak 동기화 실패 시 로컬 DB에서 롤백 처리
+            try {
+                userRepository.delete(savedUser);
+                log.info("🔄 로컬 DB 롤백 완료: {}", request.getEmail());
+            } catch (Exception rollbackError) {
+                log.error("❌ 롤백 실패: {}", rollbackError.getMessage());
+            }
+            throw new RuntimeException("Keycloak 서버와의 통신에 실패했습니다. 자세한 사유: " + e.getMessage(), e);
+        }
+        
+        log.info("✅ 회원가입 완료: {}", request.getEmail());
+        return savedUser.getId();
     }
 
     /* 2. 회원 삭제 로직 */
@@ -123,17 +196,88 @@ public class UserService {
                     ((Number) responseBody.get("expires_in")).longValue()
             );
         } catch (Exception e) {
+            // 🎯 진짜 Keycloak 에러 원인을 콘솔에 강제로 출력하는 로그 추가!
+            log.error("❌ Keycloak 통신 중 진짜 발생한 에러 원인: {}", e.getMessage(), e);
+
             throw new IllegalArgumentException("인증 서버와의 통신에 실패했거나 계정 정보가 올바르지 않습니다.", e);
         }
+
+
     }
 
     // 6. 마이페이지
-    public MyPageResponse getMyPage(Long userId) {
+    public MyPageResponse getMyPage(UUID userId) {
         // 유저가 진짜 있는지 조회하고 가져오기
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다. ID: " + userId));
 
         // 엔티티를  반환
         return new MyPageResponse(user);
+    }
+
+    // 🎯 소셜 로그인 성공 유저를 위한 JWT 토큰 발급 로직
+    public String generateTokenForOAuth(String email) {
+        // 1. DB에서 해당 이메일을 가진 유저가 있는지 확인합니다.
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다: " + email));
+
+        // 소셜 유저가 우회 로그인할 수 있도록 임시 공통 패스워드 키 설정
+        String oauthTemporaryPassword = "OAUTH_BYPASS_SECRET_KEY_123!";
+
+        try {
+            log.info("🔄 소셜 로그인 사용자의 Keycloak 자격 증명 동기화 설정 시작: {}", email);
+
+            // 2. 💡 Keycloak Admin Client를 활용하여, 해당 유저의 Keycloak 비밀번호를 임시 키로 강제 업데이트(원격 제어)합니다.
+            org.keycloak.representations.idm.CredentialRepresentation credential = new org.keycloak.representations.idm.CredentialRepresentation();
+            credential.setType(org.keycloak.representations.idm.CredentialRepresentation.PASSWORD);
+            credential.setValue(oauthTemporaryPassword);
+            credential.setTemporary(false);
+
+            // Keycloak 내부의 유저를 찾아 비밀번호를 즉시 변경시킵니다.
+            keycloakAdminClient.realm(realm).users().search(email)
+                    .stream()
+                    .findFirst()
+                    .ifPresent(userRep -> {
+                        keycloakAdminClient.realm(realm).users().get(userRep.getId()).resetPassword(credential);
+                        log.info("✅ Keycloak 원격 유저 패스워드 동기화 성공 (비밀번호 검증 우회)");
+                    });
+
+        } catch (Exception e) {
+            log.warn("⚠️ Keycloak 유저 패스워드 동기화 중 경고 발생 (기존 가입 계정 검증): {}", e.getMessage());
+        }
+
+        // 3. 💡 동기화된 비밀번호를 활용해 일반 로그인과 완벽히 동일한 'factchecker-client' 토큰을 정식 요청합니다.
+        String url = keycloakAuthServerUrl + "/realms/factchecker/protocol/openid-connect/token";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("grant_type", "password");
+        params.add("client_id", "factchecker-client");
+        params.add("username", user.getEmail());
+        params.add("password", oauthTemporaryPassword); // 동기화시킨 비밀번호 전달
+
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, headers);
+
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    org.springframework.http.HttpMethod.POST,
+                    requestEntity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> responseBody = response.getBody();
+
+            if (responseBody != null && responseBody.containsKey("access_token")) {
+                log.info("🚀 [성공] 소셜 로그인 유저 전용 정식 Access Token 발급 완료");
+                return (String) responseBody.get("access_token");
+            }
+            throw new IllegalArgumentException("Keycloak 토큰 응답에 access_token이 누락되었습니다.");
+        } catch (Exception e) {
+            log.error("❌ 소셜 로그인용 정식 토큰 발행 최종 실패: {}", e.getMessage(), e);
+            throw new IllegalArgumentException("인증 서버로부터 유저 토큰을 발행하는 데 실패했습니다.", e);
+        }
     }
 }

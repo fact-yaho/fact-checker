@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
 @Table(name= "p_user")
 @Getter
@@ -17,7 +19,7 @@ public class User {
 
     @Id
     @GeneratedValue
-    private long id;
+    private UUID id;
 
     @Column(nullable = false, unique = true ,length = 50 ) //중복 가입방지
     private String email;
