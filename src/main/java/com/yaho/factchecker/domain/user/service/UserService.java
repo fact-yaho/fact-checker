@@ -75,7 +75,7 @@ public class UserService {
         //  [Keycloak 유저 동기화 생성]
         try {
             log.info("🔄 Keycloak 유저 생성 시작: {}", request.getEmail());
-            
+
             // 1) Keycloak 유저 기본 프로필 정의
             UserRepresentation keycloakUser = new UserRepresentation();
             keycloakUser.setUsername(request.getEmail()); // 로그인 ID로 이메일 사용
@@ -96,17 +96,17 @@ public class UserService {
             try {
                 log.info("📡 Keycloak Admin API 호출 - Realm: {}, Email: {}", realm, request.getEmail());
                 response = keycloakAdminClient.realm(realm).users().create(keycloakUser);
-                
+
                 int statusCode = response.getStatus();
                 log.info("📊 Keycloak 응답 상태 코드: {}", statusCode);
-                
+
                 if (statusCode == 201) {
                     log.info("✅ Keycloak 서버 유저 동기화 성공: {}", request.getEmail());
                 } else {
                     String errorBody = response.readEntity(String.class);
                     log.error("❌ Keycloak 유저 생성 실패! 상태 코드: {}", statusCode);
                     log.error("❌ Keycloak 서버 에러 응답: {}", errorBody);
-                    
+
                     // 로컬 DB에서 롤백
                     userRepository.delete(savedUser);
                     throw new RuntimeException("Keycloak 사용자 생성 실패 (상태코드: " + statusCode + "): " + errorBody);
@@ -127,7 +127,7 @@ public class UserService {
             }
             throw new RuntimeException("Keycloak 서버와의 통신에 실패했습니다. 자세한 사유: " + e.getMessage(), e);
         }
-        
+
         log.info("✅ 회원가입 완료: {}", request.getEmail());
         return savedUser.getId();
     }
@@ -164,7 +164,7 @@ public class UserService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new IllegalArgumentException("Invalid password: 비밀번호가 일치하지 않습니다");
         }
-    //  주입받은 환경변수를 활용하여 엔드포인트 설정
+        //  주입받은 환경변수를 활용하여 엔드포인트 설정
         String keycloakTokenUrl = keycloakAuthServerUrl + "/realms/factchecker/protocol/openid-connect/token";
 
         HttpHeaders headers = new HttpHeaders();
@@ -221,8 +221,19 @@ public class UserService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다: " + email));
 
-        // 소셜 유저가 우회 로그인할 수 있도록 임시 공통 패스워드 키 설정
-        String oauthTemporaryPassword = "OAUTH_BYPASS_SECRET_KEY_123!";
+        // 🔒 [보안 수정] 고정된 공용 비밀번호 대신, 호출할 때마다 랜덤 임시 비밀번호를 발급하고
+        //     토큰 발급 직후 폐기합니다. 고정값이면 이 문자열을 아는 사람이 누구든
+        //     일반 로그인(/api/v1/auth/login)으로 해당 이메일 계정에 침투할 수 있기 때문입니다.
+        String oauthTemporaryPassword = UUID.randomUUID().toString() + "!Aa1";
+
+        // 🎯 [자가 복구] 예전에 가입해서 Keycloak 동기화가 안 되어 있던 유저도
+        //     여기서 항상 먼저 존재 여부를 확인 후 없으면 생성합니다.
+        //     (신규/기존 유저 분기와 무관하게 토큰 발급 시점마다 보장)
+        try {
+            createKeycloakUserIfNotExists(email, user.getName(), oauthTemporaryPassword);
+        } catch (Exception e) {
+            log.warn("⚠️ Keycloak 유저 존재 확인/생성 중 경고 발생: {}", e.getMessage());
+        }
 
         try {
             log.info("🔄 소셜 로그인 사용자의 Keycloak 자격 증명 동기화 설정 시작: {}", email);
@@ -237,10 +248,10 @@ public class UserService {
             keycloakAdminClient.realm(realm).users().search(email)
                     .stream()
                     .findFirst()
-                    .ifPresent(userRep -> {
+                    .ifPresentOrElse(userRep -> {
                         keycloakAdminClient.realm(realm).users().get(userRep.getId()).resetPassword(credential);
                         log.info("✅ Keycloak 원격 유저 패스워드 동기화 성공 (비밀번호 검증 우회)");
-                    });
+                    }, () -> log.error("❌ Keycloak에서 유저를 여전히 찾을 수 없습니다: {}", email));
 
         } catch (Exception e) {
             log.warn("⚠️ Keycloak 유저 패스워드 동기화 중 경고 발생 (기존 가입 계정 검증): {}", e.getMessage());
@@ -280,4 +291,31 @@ public class UserService {
             throw new IllegalArgumentException("인증 서버로부터 유저 토큰을 발행하는 데 실패했습니다.", e);
         }
     }
+
+    // 키클록 db 에저장
+    public void createKeycloakUserIfNotExists(String email, String name, String rawPassword) {
+        boolean exists = !keycloakAdminClient.realm(realm).users().search(email).isEmpty();
+        if (exists) return;
+
+        UserRepresentation keycloakUser = new UserRepresentation();
+        keycloakUser.setUsername(email);
+        keycloakUser.setEmail(email);
+        keycloakUser.setFirstName(name);
+        keycloakUser.setEnabled(true);
+        keycloakUser.setEmailVerified(true);
+
+        CredentialRepresentation credential = new CredentialRepresentation();
+        credential.setType(CredentialRepresentation.PASSWORD);
+        credential.setValue(rawPassword);
+        credential.setTemporary(false);
+        keycloakUser.setCredentials(Collections.singletonList(credential));
+
+        try (Response response = keycloakAdminClient.realm(realm).users().create(keycloakUser)) {
+            if (response.getStatus() != 201) {
+                log.error("❌ OAuth 유저 Keycloak 동기화 실패: {}", response.readEntity(String.class));
+            }
+        }
+    }
+
+
 }

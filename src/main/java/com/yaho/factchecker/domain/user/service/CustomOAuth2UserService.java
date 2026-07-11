@@ -27,19 +27,20 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserService userService; // Keycloak 동기화용
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest)  throws OAuth2AuthenticationException {
         OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
         OAuth2User oAuth2User = delegate.loadUser(userRequest);
 
-       String registrationId = userRequest.getClientRegistration().getRegistrationId();
-       String userName = userRequest.getClientRegistration()
-               .getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
+        String registrationId = userRequest.getClientRegistration().getRegistrationId();
+        String userName = userRequest.getClientRegistration()
+                .getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
 
-       Map<String,Object> attributes = oAuth2User.getAttributes();
+        Map<String,Object> attributes = oAuth2User.getAttributes();
 
-       log.info("CustomOAuth2UserService 로드 완료 - 채널: {}", registrationId);
+        log.info("CustomOAuth2UserService 로드 완료 - 채널: {}", registrationId);
 
 
         OAuth2UserInfo oAuth2UserInfo = null;
@@ -52,8 +53,8 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
         }
 
 
-       String email = oAuth2UserInfo.getEmail();
-       String name =  oAuth2UserInfo.getName();
+        String email = oAuth2UserInfo.getEmail();
+        String name =  oAuth2UserInfo.getName();
 
         if ("kakao".equals(registrationId) && (email == null || email.isBlank())) {
             // oAuth2User.getAttributes().get("id")는 카카오가 주는 절대 겹치지 않는 숫자 고유값입니다.
@@ -61,11 +62,11 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
             email = kakaoId + "@kakao.user"; // 예: 3214342251@kakao.user
         }
 
-       if(email == null||email.isBlank()){
-           throw new OAuth2AuthenticationException("이메일 정보를 가져올 수 없습니다. 이메일 제공 동의가 필요합니다.");
-       }
+        if(email == null||email.isBlank()){
+            throw new OAuth2AuthenticationException("이메일 정보를 가져올 수 없습니다. 이메일 제공 동의가 필요합니다.");
+        }
 
-       User user = saveOrUpdate(email, name);
+        User user = saveOrUpdate(email, name);
 
         return new PrincipalDetails(user, attributes);
     }
@@ -81,7 +82,7 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
                 .orElseGet(()->{
                     try {
                         log.info("새로운 OAuth 사용자 생성 시작: email={}, name={}", email, name);
-                        
+
                         String shortUuid = UUID.randomUUID().toString().substring(0, 8); // 8자리 UUID 생성
                         // 이름 누락시 방어 코드
                         String safeName = (name != null && !name.isBlank()) ? name : "user";
@@ -99,9 +100,21 @@ public class CustomOAuth2UserService implements OAuth2UserService <OAuth2UserReq
                                 .role(Role.USER)
                                 .password(encodedPassword)
                                 .build();
-                        
+
                         User savedUser = userRepository.save(newUser);
                         log.info("새로운 OAuth 사용자 생성 완료: email={}, nickname={}", email, uniqueNickname);
+
+                        // 🎯 [추가] Keycloak에도 동일한 유저를 동기화 생성합니다.
+                        //     이게 없으면 이후 generateTokenForOAuth()에서 Keycloak에 유저를 못 찾아
+                        //     비밀번호 리셋이 조용히 스킵되고, 토큰 발급 시 401이 발생합니다.
+                        try {
+                            userService.createKeycloakUserIfNotExists(email, safeName, randomRawPassword);
+                        } catch (Exception e) {
+                            // Keycloak 동기화가 실패해도 로컬 로그인 자체는 막지 않습니다.
+                            // (generateTokenForOAuth 호출 시 재시도되도록 다음 로그인에서 다시 확인됩니다.)
+                            log.error("❌ OAuth 신규 유저 Keycloak 동기화 실패: email={}", email, e);
+                        }
+
                         return savedUser;
                     } catch (Exception e) {
                         log.error("OAuth 사용자 생성 중 오류 발생: email={}", email, e);

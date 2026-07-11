@@ -1,22 +1,16 @@
 package com.yaho.factchecker.global.util.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yaho.factchecker.domain.user.service.CustomOAuth2UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.client.RestTemplate;
-
-import java.time.Duration;
 
 @Slf4j
 @Configuration
@@ -104,26 +98,5 @@ public class SecurityConfig {
                 );
 
         return http.build();
-    }
-
-    @Bean
-    public RestTemplate restTemplate() {
-        // 요청 팩토리 생성
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        // 타임아웃 10초
-        factory.setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
-        factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
-
-        RestTemplate restTemplate = new RestTemplate(factory);
-
-        // Jackson ObjectMapper 설정 - unknown 필드 무시
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-
-        MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
-        converter.setObjectMapper(objectMapper);
-
-        restTemplate.getMessageConverters().add(0, converter);
-        return restTemplate;
     }
 }
