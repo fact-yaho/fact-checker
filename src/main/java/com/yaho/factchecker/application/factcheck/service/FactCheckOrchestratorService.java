@@ -4,7 +4,6 @@ import com.yaho.factchecker.application.ai.port.ClaimAnalysisPort;
 import com.yaho.factchecker.application.ai.port.StanceAnalysisPort;
 import com.yaho.factchecker.application.factcheck.dto.internal.ClaimAnalysisBundle;
 import com.yaho.factchecker.application.factcheck.dto.request.FactCheckStartRequest;
-import com.yaho.factchecker.application.factcheck.dto.response.FactCheckStartResponse;
 import com.yaho.factchecker.domain.ai.dto.common.CountryInfo;
 import com.yaho.factchecker.domain.ai.dto.common.ExtractedClaim;
 import com.yaho.factchecker.domain.ai.dto.request.ClaimAnalysisRequest;
@@ -41,15 +40,19 @@ import com.yaho.factchecker.global.type.ClaimCategory;
 import com.yaho.factchecker.global.type.InputType;
 import com.yaho.factchecker.global.type.Stance;
 import com.yaho.factchecker.global.type.Verdict;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FactCheckOrchestratorService {
@@ -208,15 +211,61 @@ public class FactCheckOrchestratorService {
     private List<EvidenceForStanceRequest> toEvidenceForStanceRequests(
             List<RetrievedEvidence> evidences
     ) {
-        return evidences.stream()
-                .map(evidence -> new EvidenceForStanceRequest(
-                        evidence.evidenceDocumentId(),
-                        evidence.title(),
-                        evidence.contentCleaned(),
-                        evidence.publishedAt() == null ? null : evidence.publishedAt().toLocalDate()
-                ))
+        return IntStream.range(0, evidences.size())
+                .mapToObj(index -> {
+                    RetrievedEvidence evidence = evidences.get(index);
+                    return new EvidenceForStanceRequest(
+                            index + 1,   // idx: 1부터 시작 (UUID는 LLM에 노출하지 않음)
+                            evidence.title(),
+                            evidence.contentCleaned(),
+                            evidence.publishedAt() == null ? null : evidence.publishedAt().toLocalDate()
+                    );
+                })
                 .toList();
     }
+
+    /**
+     * LLM이 반환한 stance 결과를 idx 기준으로 매핑
+     * LLM이 idx를 누락하거나, 범위를 벗어난 idx를 반환하거나, 같은 idx를 중복 반환할 수 있으므로
+     * 유효하지 않은 항목은 로그를 남기고 제외
+     */
+    private Map<Integer, EvidenceStanceResultResponse> toStanceByIdx(ClaimAnalysisBundle bundle) {
+        int evidenceCount = bundle.retrievedEvidences().size();
+        Map<Integer, EvidenceStanceResultResponse> stanceByIdx = new java.util.HashMap<>();
+
+        List<EvidenceStanceResultResponse> stanceResults =
+                bundle.stanceAnalysis().evidences() == null
+                        ? List.<EvidenceStanceResultResponse>of()
+                        : bundle.stanceAnalysis().evidences();
+
+        for (EvidenceStanceResultResponse result : stanceResults) {
+            Integer idx = result.idx();
+
+            if (idx == null || idx < 1 || idx > evidenceCount) {
+                log.warn("stance 응답의 idx가 유효하지 않아 제외합니다. idx={}, evidenceCount={}",
+                        idx, evidenceCount);
+                continue;
+            }
+
+            if (result.stance() == null) {
+                log.warn("stance 값이 없어 제외합니다. idx={}", idx);
+                continue;
+            }
+
+            EvidenceStanceResultResponse previous = stanceByIdx.putIfAbsent(idx, result);
+            if (previous != null) {
+                log.warn("stance 응답에 중복 idx가 있어 첫 번째 값만 사용합니다. idx={}", idx);
+            }
+        }
+
+        if (stanceByIdx.size() < evidenceCount) {
+            log.warn("stance 결과 개수가 요청 근거 수보다 적습니다. 요청={}, 유효응답={}",
+                    evidenceCount, stanceByIdx.size());
+        }
+
+        return stanceByIdx;
+    }
+
 
     private CreateAnalysisResultCommand toOutOfScopeResultCommand(
             UUID userId,
@@ -365,7 +414,7 @@ public class FactCheckOrchestratorService {
     }
 
     private String buildClaimSummary(ScoreCalculationResult scoreResult, ClaimAnalysisBundle bundle) {
-        int evidenceCount = bundle.stanceAnalysis().evidences().size();
+        int evidenceCount = toStanceByIdx(bundle).size();   // 유효 stance 결과 수
         return String.format("공식 근거 %d건과 대조한 결과, %s.", evidenceCount, verdictPhrase(scoreResult.verdict()));
     }
 
@@ -382,42 +431,39 @@ public class FactCheckOrchestratorService {
     }
 
     private List<CreateAnalysisEvidenceCommand> toEvidenceCommands(ClaimAnalysisBundle bundle) {
-        Map<UUID, EvidenceStanceResultResponse> stanceByEvidenceId =
-                bundle.stanceAnalysis().evidences().stream()
-                        .collect(Collectors.toMap(
-                                EvidenceStanceResultResponse::evidenceDocumentId,
-                                Function.identity()
-                        ));
+        Map<Integer, EvidenceStanceResultResponse> stanceByIdx = toStanceByIdx(bundle);
+        List<RetrievedEvidence> evidences = bundle.retrievedEvidences();
 
-        return IntStream.range(0, bundle.retrievedEvidences().size())
-                .mapToObj(index -> {
-                    RetrievedEvidence evidence = bundle.retrievedEvidences().get(index);
-                    EvidenceStanceResultResponse stanceResult =
-                            stanceByEvidenceId.get(evidence.evidenceDocumentId());
+        List<CreateAnalysisEvidenceCommand> commands = new ArrayList<>();
+        int displayOrder = 1;
 
-                    if (stanceResult == null) {
-                        throw new IllegalStateException(
-                                "stance 결과가 없는 evidence입니다. evidenceDocumentId="
-                                        + evidence.evidenceDocumentId()
-                        );
-                    }
+        for (int index = 0; index < evidences.size(); index++) {
+            RetrievedEvidence evidence = evidences.get(index);
+            EvidenceStanceResultResponse stanceResult = stanceByIdx.get(index + 1);
 
-                    return new CreateAnalysisEvidenceCommand(
-                            null,
-                            EvidenceSourceType.PUBLIC_API,
-                            evidence.title(),
-                            evidence.originalUrl(),
-                            evidence.evidenceDocumentId().toString(),
-                            evidence.contentCleaned(),
-                            stanceResult.stance(),
-                            evidence.relevanceScore(),
-                            evidence.similarityScore(),
-                            stanceResult.reason(),
-                            evidence.publishedAt(),
-                            index + 1
-                    );
-                })
-                .toList();
+            if (stanceResult == null) {
+                log.warn("stance 결과 누락으로 근거를 제외합니다. idx={}, evidenceDocumentId={}",
+                        index + 1, evidence.evidenceDocumentId());
+                continue;
+            }
+
+            commands.add(new CreateAnalysisEvidenceCommand(
+                    null,
+                    EvidenceSourceType.PUBLIC_API,
+                    evidence.title(),
+                    evidence.originalUrl(),
+                    evidence.evidenceDocumentId().toString(),
+                    evidence.contentCleaned(),
+                    stanceResult.stance(),
+                    evidence.relevanceScore(),
+                    evidence.similarityScore(),
+                    stanceResult.reason(),
+                    evidence.publishedAt(),
+                    displayOrder++
+            ));
+        }
+
+        return commands;
     }
 
     private List<ClaimScoreInput> toClaimScoreInputs(List<ClaimAnalysisBundle> analysisBundles) {
@@ -436,23 +482,18 @@ public class FactCheckOrchestratorService {
     }
 
     private List<EvidenceJudgment> toEvidenceJudgments(ClaimAnalysisBundle bundle) {
-        Map<UUID, EvidenceStanceResultResponse> stanceByEvidenceId =
-                bundle.stanceAnalysis().evidences().stream()
-                        .collect(Collectors.toMap(
-                                EvidenceStanceResultResponse::evidenceDocumentId,
-                                Function.identity()
-                        ));
+        Map<Integer, EvidenceStanceResultResponse> stanceByIdx = toStanceByIdx(bundle);
+        List<RetrievedEvidence> evidences = bundle.retrievedEvidences();
 
-        return bundle.retrievedEvidences().stream()
-                .map(evidence -> {
-                    EvidenceStanceResultResponse stanceResult =
-                            stanceByEvidenceId.get(evidence.evidenceDocumentId());
+        return IntStream.range(0, evidences.size())
+                .mapToObj(index -> {
+                    RetrievedEvidence evidence = evidences.get(index);
+                    EvidenceStanceResultResponse stanceResult = stanceByIdx.get(index + 1);
 
                     if (stanceResult == null) {
-                        throw new IllegalStateException(
-                                "stance 결과가 없는 evidence입니다. evidenceDocumentId="
-                                        + evidence.evidenceDocumentId()
-                        );
+                        log.warn("stance 결과 누락으로 근거를 제외합니다. idx={}, evidenceDocumentId={}",
+                                index + 1, evidence.evidenceDocumentId());
+                        return null;
                     }
 
                     return EvidenceJudgment.of(
@@ -462,6 +503,7 @@ public class FactCheckOrchestratorService {
                             evidence.similarityScore()
                     );
                 })
+                .filter(Objects::nonNull)
                 .toList();
     }
 }
