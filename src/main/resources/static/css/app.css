@@ -11,6 +11,10 @@
 html { -webkit-text-size-adjust: 100%; }
 body { font-feature-settings: "ss01"; }
 
+/* 한글은 글자 단위로도 줄바꿈이 가능해서 단어 중간이 잘린다("정리해 드" / "립니다").
+   keep-all 로 띄어쓰기 단위로만 끊고, 대신 URL 등 끊을 수 없는 긴 토큰은 넘치지 않게 허용. */
+body { word-break: keep-all; overflow-wrap: break-word; }
+
 /* 숫자는 계기판처럼 고정폭 */
 .tnum { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 

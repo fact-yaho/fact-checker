@@ -380,9 +380,12 @@
             <span>비회원은 이 결과가 <b>저장되지 않아요.</b> 이 화면을 벗어나면 다시 볼 수 없으니, 결과를 남기려면 <a href="/signup" class="font-bold underline hover:text-amber-950">회원가입</a>을 권장해요.</span>
           </div>` : "";
         const scopeNoteHtml = `
-          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-8 mb-1 flex items-start gap-2 text-[12.5px] text-amber-900 leading-relaxed reveal">
+          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-8 mb-1 flex items-start gap-2 text-[12.5px] text-amber-900 leading-relaxed break-keep reveal">
             <i class="ti ti-info-circle text-[15px] mt-px flex-none" aria-hidden="true"></i>
-            <span>이 검증은 <b>외교부 공식 자료(공공데이터포털 API)</b>만을 근거로 해요. 외교부 자료에 관련 내용이 없으면 실제로는 사실이어도 <b>'근거 부족'으로 나올 수 있고</b>, 여기서 확인됐다고 모든 맥락에서 사실임을 보장하진 않아요.</span>
+            <span class="space-y-0.5">
+              <span class="block">이 검증은 <b>외교부 공식 자료(공공데이터포털 API)</b>만을 근거로 해요.</span>
+              <span class="block">외교부 자료에 관련 내용이 없으면 실제로는 사실이어도 <b>'근거 부족'으로 나올 수 있고</b>, 여기서 확인됐다고 모든 맥락에서 사실임을 보장하진 않아요.</span>
+            </span>
           </div>`;
         $("report").innerHTML = guestNotice + header + summary + scopeNoteHtml + claimsBlock;
         $("loading").classList.add("hidden");
