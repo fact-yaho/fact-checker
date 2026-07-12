@@ -76,6 +76,12 @@
   async function safeMessage(res) {
     try {
       const raw = await res.text();
+      // 5xx = 서버 내부 오류. 원문(스택·외부 서비스 응답 등)을 화면에 노출하지 않는다.
+      // 디버깅용으로 콘솔에만 남긴다.
+      if (res.status >= 500) {
+        if (raw) console.error(`[${res.status}]`, raw);
+        return "일시적인 오류가 발생했어요. 잠시 후 다시 시도해 주세요.";
+      }
       if (!raw) return `요청이 실패했어요 (${res.status})`;
       try { const j = JSON.parse(raw); return j.message || j.error || raw; }
       catch { return raw; }
