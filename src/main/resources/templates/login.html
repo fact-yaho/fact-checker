@@ -65,7 +65,10 @@
       if (returnUrl && returnUrl !== "/") $("signupLink").href = `/signup?returnUrl=${encodeURIComponent(returnUrl)}`;
       if (Y.Auth.isLoggedIn) { location.replace(returnUrl); return; }
 
-      function showErr(msg) { $("err").textContent = msg; $("err").classList.remove("hidden"); }
+      function showErr(msg, actionsHtml) {
+        $("err").innerHTML = `<p>${Y.esc(msg)}</p>` + (actionsHtml || "");
+        $("err").classList.remove("hidden");
+      }
 
       $("form").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -80,7 +83,19 @@
           if (!Y.Auth.isLoggedIn) throw new Error("토큰을 받지 못했어요.");
           location.href = returnUrl;
         } catch (err) {
-          showErr(err.status === 401 ? (err.message || "이메일 또는 비밀번호가 올바르지 않습니다.") : (err.message || "로그인에 실패했어요. 잠시 후 다시 시도해 주세요."));
+          if (err.status === 401) {
+            // 보안상 "가입되지 않은 이메일"과 "비밀번호 오류"를 구분하지 않으므로(계정 열거 방지),
+            // 대신 다음 행동을 바로 제시해 사용자가 막히지 않도록 한다.
+            const signupHref = returnUrl && returnUrl !== "/"
+              ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup";
+            showErr(err.message || "이메일 또는 비밀번호가 올바르지 않습니다.",
+              `<p class="mt-1.5 text-xs text-red-500">
+                 아직 계정이 없다면 <a href="${signupHref}" class="font-bold underline underline-offset-2 hover:text-red-700">회원가입</a>,
+                 비밀번호가 기억나지 않으면 <a href="/reset-password" class="font-bold underline underline-offset-2 hover:text-red-700">비밀번호 찾기</a>를 이용해 주세요.
+               </p>`);
+          } else {
+            showErr(err.message || "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+          }
           $("submit").disabled = false; $("submit").textContent = "로그인";
         }
       });
