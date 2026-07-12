@@ -1,251 +1,105 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>팩트체커 - 로그인</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            width: 100%;
-            max-width: 400px;
-            padding: 40px;
-        }
-
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .logo h1 {
-            font-size: 28px;
-            color: #333;
-            letter-spacing: -1px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 8px;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 14px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-            margin-top: 10px;
-        }
-
-        .btn-login:hover {
-            background: #5a6fd6;
-        }
-
-        .divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            color: #bbb;
-            font-size: 12px;
-            margin: 20px 0;
-        }
-
-        .divider::before, .divider::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid #eee;
-        }
-
-        .divider:not(:empty)::before { margin-right: .25em; }
-        .divider:not(:empty)::after { margin-left: .25em; }
-
-        .social-login {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .btn-social {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            width: 100%;
-            padding: 12px;
-            border-radius: 5px;
-            font-size: 15px;
-            text-decoration: none;
-            font-weight: 500;
-            cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            transition: opacity 0.3s;
-        }
-
-        .btn-social:hover {
-            opacity: 0.9;
-        }
-
-        .btn-google {
-            background: #ffffff;
-            color: #333;
-            border: 1px solid #ddd;
-        }
-
-        .btn-kakao {
-            background: #FEE500;
-            color: #191919;
-            border: none;
-        }
-
-        .btn-social img {
-            width: 20px;
-            height: 20px;
-            object-fit: contain;
-        }
-
-        .footer-links {
-            text-align: center;
-            margin-top: 25px;
-            font-size: 14px;
-        }
-
-        .footer-links a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        .footer-links a:hover {
-            text-decoration: underline;
-        }
-
-        .error-message {
-            color: #e53e3e;
-            background: #fff5f5;
-            border: 1px solid #fed7d7;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            margin-bottom: 20px;
-            display: none;
-            text-align: center;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 · 외교 팩트체커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/common.js"></script>
 </head>
-<body>
-<div class="container">
-    <div class="logo">
-        <h1>🔍 팩트체커 로그인</h1>
-    </div>
+<body class="min-h-screen bg-paper text-ink antialiased">
 
-    <div id="errorMessage" class="error-message"></div>
+  <main class="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+    <a href="/" class="flex items-center gap-2.5 mb-7">
+      <span class="grid place-items-center w-10 h-10 rounded-xl bg-brand text-white text-xl"><i class="ti ti-shield-check" aria-hidden="true"></i></span>
+      <span class="font-extrabold text-ink text-xl tracking-tight">외교 팩트체커</span>
+    </a>
 
-    <form id="loginForm">
-        <div class="form-group">
-            <label for="email">이메일 주소</label>
-            <input type="email" id="email" required placeholder="example@email.com">
+    <div class="w-full max-w-[420px] bg-white rounded-xl2 shadow-card border border-line p-7 sm:p-8">
+      <h1 class="text-xl font-extrabold text-ink">로그인</h1>
+      <p class="mt-1 text-sm text-slate-500">기록을 다시 확인하려면 로그인하세요.</p>
+
+      <div id="err" class="hidden mt-5 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium px-4 py-3"></div>
+
+      <form id="form" class="mt-5 space-y-4" novalidate>
+        <div>
+          <label for="email" class="block text-sm font-bold text-ink-2 mb-1.5">이메일</label>
+          <input id="email" type="email" autocomplete="email" required placeholder="name@email.com"
+            class="w-full rounded-xl border border-line bg-slate-50/70 px-4 py-3 text-[15px] focus:bg-white focus:border-brand transition">
         </div>
-        <div class="form-group">
-            <label for="password">비밀번호</label>
-            <input type="password" id="password" required placeholder="비밀번호를 입력하세요">
+        <div>
+          <label for="password" class="block text-sm font-bold text-ink-2 mb-1.5">비밀번호</label>
+          <input id="password" type="password" autocomplete="current-password" required placeholder="비밀번호"
+            class="w-full rounded-xl border border-line bg-slate-50/70 px-4 py-3 text-[15px] focus:bg-white focus:border-brand transition">
+          <div class="text-right mt-1.5">
+            <a href="/reset-password" class="text-xs font-semibold text-slate-400 hover:text-brand transition">비밀번호를 잊으셨나요?</a>
+          </div>
         </div>
-        <button type="submit" class="btn-login">로그인</button>
-    </form>
+        <button id="submit" type="submit"
+          class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-3.5 text-sm font-bold text-white hover:bg-brand-700 active:scale-[.99] transition disabled:opacity-60">
+          로그인
+        </button>
+      </form>
 
-    <div class="divider">또는 소셜 계정으로 로그인</div>
+      <div class="flex items-center gap-3 my-5">
+        <span class="flex-1 h-px bg-line"></span><span class="text-xs text-slate-400 font-medium">또는</span><span class="flex-1 h-px bg-line"></span>
+      </div>
 
-    <div class="social-login">
-        <a href="/oauth2/authorization/google" class="btn-social btn-google">
-            <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google">
-            Google로 시작하기
-        </a>
+      <a id="google" href="/oauth2/authorization/google"
+        class="flex items-center justify-center gap-2.5 w-full rounded-xl border border-line bg-white px-4 py-3 text-sm font-semibold text-ink-2 hover:bg-slate-50 transition">
+        <img src="https://developers.google.com/identity/images/g-logo.png" alt="" width="18" height="18"> Google로 계속하기
+      </a>
 
+      <p class="mt-6 text-center text-sm text-slate-500">아직 계정이 없으신가요? <a id="signupLink" href="/signup" class="font-bold text-brand hover:underline">회원가입</a></p>
     </div>
+  </main>
 
-    <div class="footer-links">
-        아직 계정이 없으신가요? <a href="/signup">회원가입</a>
-    </div>
-</div>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const Y = window.Yaho;
+      const $ = (id) => document.getElementById(id);
+      const returnUrl = new URLSearchParams(location.search).get("returnUrl") || "/";
+      if (returnUrl && returnUrl !== "/") $("signupLink").href = `/signup?returnUrl=${encodeURIComponent(returnUrl)}`;
+      if (Y.Auth.isLoggedIn) { location.replace(returnUrl); return; }
 
-<script>
-    const loginForm = document.getElementById('loginForm');
-    const errorMessage = document.getElementById('errorMessage');
+      function showErr(msg, actionsHtml) {
+        $("err").innerHTML = `<p>${Y.esc(msg)}</p>` + (actionsHtml || "");
+        $("err").classList.remove("hidden");
+      }
 
-    loginForm.addEventListener('submit', async (e) => {
+      $("form").addEventListener("submit", async (e) => {
         e.preventDefault();
-
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-
+        $("err").classList.add("hidden");
+        const email = $("email").value.trim();
+        const password = $("password").value;
+        if (!email || !password) { showErr("이메일과 비밀번호를 입력해 주세요."); return; }
+        $("submit").disabled = true; $("submit").textContent = "로그인 중…";
         try {
-            const response = await fetch('/api/v1/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                const token = data.accessToken || data.access_token || data.token;
-                localStorage.setItem('token', token);
-                window.location.href = '/mypage';
-            } else {
-                const error = await response.json();
-                showError(error.message || '로그인에 실패했습니다.');
-            }
-        } catch (error) {
-            showError('서버 연결 오류가 발생했습니다.');
+          const data = await Y.apiJson("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+          Y.Auth.save(data);
+          if (!Y.Auth.isLoggedIn) throw new Error("토큰을 받지 못했어요.");
+          location.href = returnUrl;
+        } catch (err) {
+          if (err.status === 401) {
+            // 보안상 "가입되지 않은 이메일"과 "비밀번호 오류"를 구분하지 않으므로(계정 열거 방지),
+            // 대신 다음 행동을 바로 제시해 사용자가 막히지 않도록 한다.
+            const signupHref = returnUrl && returnUrl !== "/"
+              ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : "/signup";
+            showErr(err.message || "이메일 또는 비밀번호가 올바르지 않습니다.",
+              `<p class="mt-1.5 text-xs text-red-500">
+                 아직 계정이 없다면 <a href="${signupHref}" class="font-bold underline underline-offset-2 hover:text-red-700">회원가입</a>,
+                 비밀번호가 기억나지 않으면 <a href="/reset-password" class="font-bold underline underline-offset-2 hover:text-red-700">비밀번호 찾기</a>를 이용해 주세요.
+               </p>`);
+          } else {
+            showErr(err.message || "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.");
+          }
+          $("submit").disabled = false; $("submit").textContent = "로그인";
         }
+      });
     });
-
-    function showError(message) {
-        errorMessage.textContent = message;
-        errorMessage.style.display = 'block';
-        setTimeout(() => {
-            errorMessage.style.display = 'none';
-        }, 5000);
-    }
-</script>
+  </script>
 </body>
 </html>

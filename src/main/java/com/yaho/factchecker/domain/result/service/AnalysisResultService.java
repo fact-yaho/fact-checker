@@ -1,5 +1,6 @@
 package com.yaho.factchecker.domain.result.service;
 
+import com.yaho.factchecker.domain.result.dto.AnalysisResultDetailResponse;
 import com.yaho.factchecker.domain.result.dto.CreateAnalysisEvidenceCommand;
 import com.yaho.factchecker.domain.result.dto.CreateAnalysisResultCommand;
 import com.yaho.factchecker.domain.result.dto.CreateClaimAnalysisResultCommand;
@@ -98,6 +99,24 @@ public class AnalysisResultService {
         analysisResultRepository.delete(analysisResult);
     }
 
+    @Transactional
+    public void deleteByUser(UUID analysisResultId, UUID userId) {
+        if (analysisResultId == null) {
+            throw new IllegalArgumentException("분석 결과 ID는 필수입니다.");
+        }
+
+        AnalysisResult analysisResult = analysisResultRepository.findById(analysisResultId)
+                .orElseThrow(() -> new IllegalArgumentException("분석 결과를 찾을 수 없습니다. id=" + analysisResultId));
+
+        // 소유권 검증: 본인 검증 기록만 삭제 가능
+        if (userId == null || analysisResult.getUserId() == null
+                || !analysisResult.getUserId().equals(userId)) {
+            throw new SecurityException("본인의 검증 기록만 삭제할 수 있습니다.");
+        }
+
+        delete(analysisResultId); // 기존 삭제 로직(소주장·근거·점수까지) 그대로 재사용
+    }
+
     // Helper Methods =========================================================================
     private ClaimAnalysisResult saveClaimResult(
         AnalysisResult savedResult,
@@ -188,15 +207,26 @@ public class AnalysisResultService {
             throw new IllegalArgumentException("최종 종합 판정은 필수입니다.");
         }
 
-        if (command.finalScore() == null && command.verdict() != Verdict.INSUFFICIENT) {
+        // 🔧 점수 없이 저장 가능한 판정: INSUFFICIENT(근거 부족), OUT_OF_SCOPE(검증 대상 아님)
+        if (command.finalScore() == null && !isUnscoredVerdict(command.verdict())) {
             throw new IllegalArgumentException("최종 종합 점수는 필수입니다.");
         }
 
-        if (command.claimResults() == null || command.claimResults().isEmpty()) {
+        if (command.claimResults() == null) {
+            throw new IllegalArgumentException("소주장 분석 결과 목록은 null일 수 없습니다.");
+        }
+
+        // 🔧 소주장이 비어도 되는 경우는 OUT_OF_SCOPE(검증 가능한 주장이 없는 입력)뿐
+        if (command.claimResults().isEmpty() && command.verdict() != Verdict.OUT_OF_SCOPE) {
             throw new IllegalArgumentException("소주장 분석 결과는 최소 1개 이상 필요합니다.");
         }
 
         command.claimResults().forEach(this::validateClaimCommand);
+    }
+
+    // 🔧 추가: 점수를 매기지 않는 판정
+    private boolean isUnscoredVerdict(Verdict verdict) {
+        return verdict == Verdict.INSUFFICIENT || verdict == Verdict.OUT_OF_SCOPE;
     }
 
     private void validateClaimCommand(CreateClaimAnalysisResultCommand claimCommand) {

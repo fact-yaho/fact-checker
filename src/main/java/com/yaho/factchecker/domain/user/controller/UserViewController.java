@@ -22,4 +22,10 @@ public class UserViewController {
     @GetMapping("/mypage")
     public String myPage()  { return "mypage";}
 
+    // 🆕 http://localhost:8080/reset-password  (비밀번호 재설정 페이지)
+    @GetMapping("/reset-password")
+    public String resetPasswordPage() {
+        return "reset-password";
+    }
+
 }

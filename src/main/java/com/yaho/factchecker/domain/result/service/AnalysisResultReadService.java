@@ -35,14 +35,6 @@ public class AnalysisResultReadService {
     private final ScoreBreakdownRepository scoreBreakdownRepository;
     private final AnalysisEvidenceRepository analysisEvidenceRepository;
 
-    /**
-     * 회원의 이전 분석 결과 목록을 조회합니다.
-     *
-     * 기록 탭 목록 화면에서 사용합니다.
-     *
-     * 이 목록은 사용자 입력 전체에 대한 종합 결과 기준입니다.
-     * 즉, 소주장별 결과가 아니라 AnalysisResult 단위로 조회합니다.
-     */
     public List<AnalysisResultSummaryResponse> findUserResultSummaries(
         UUID userId,
         Pageable pageable
@@ -56,15 +48,6 @@ public class AnalysisResultReadService {
             .toList();
     }
 
-    /**
-     * 회원의 특정 분석 결과 상세를 조회합니다.
-     *
-     * 상세 응답 구조:
-     * AnalysisResult
-     * └─ ClaimAnalysisResult 목록
-     *    ├─ ScoreBreakdown
-     *    └─ AnalysisEvidence 목록
-     */
     public AnalysisResultDetailResponse getUserResultDetail(
         UUID userId,
         UUID resultId
@@ -80,12 +63,18 @@ public class AnalysisResultReadService {
         return toDetailResponse(result);
     }
 
-    /**
-     * 단일 claim_id 기준으로 가장 최근 완료된 소주장 분석 결과를 조회합니다.
-     *
-     * 기존에는 claim_id가 AnalysisResult에 있었기 때문에 AnalysisResultDetailResponse를 반환했지만,
-     * 이제 claim_id는 ClaimAnalysisResult에 있으므로 소주장 단위 응답을 반환합니다.
-     */
+    public AnalysisResultDetailResponse getResultDetailById(UUID resultId) {
+        validateResultId(resultId);
+
+        AnalysisResult result = analysisResultRepository
+                .findById(resultId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "분석 결과를 찾을 수 없습니다. resultId=" + resultId
+                ));
+
+        return toDetailResponse(result);
+    }
+
     public Optional<ClaimAnalysisResultResponse> findReusableClaimResultByClaimId(UUID claimId) {
         validateClaimId(claimId);
 
@@ -97,11 +86,6 @@ public class AnalysisResultReadService {
             .map(this::toClaimResponse);
     }
 
-    /**
-     * 여러 claim_id 기준으로 재사용 가능한 완료 소주장 분석 결과들을 조회합니다.
-     *
-     * 유사 질문 탐색 결과로 나온 claim_id 목록을 넘겨받는 용도입니다.
-     */
     public List<ClaimAnalysisResultResponse> findReusableClaimResultsByClaimIds(List<UUID> claimIds) {
         validateClaimIds(claimIds);
 

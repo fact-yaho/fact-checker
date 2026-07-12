@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>검증 보고서 · 외교 팩트체커</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/js/tailwind.config.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/common.js"></script>
+</head>
+<body class="min-h-screen bg-paper text-ink antialiased">
+
+  <header id="nav" class="bg-white border-b border-line sticky top-0 z-40"></header>
+
+  <main class="mx-auto max-w-page px-5 py-8">
+    <a href="/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-ink transition mb-5">
+      <i class="ti ti-arrow-left" aria-hidden="true"></i> 새 검증하기
+    </a>
+
+    <div id="loading" class="rounded-xl2 border border-line bg-white p-10 text-center shadow-card">
+      <div class="inline-flex items-center gap-3 text-slate-500"><span class="spin"></span><span class="font-semibold">보고서를 불러오는 중…</span></div>
+    </div>
+
+    <div id="state" class="hidden rounded-xl2 border border-line bg-white p-12 text-center shadow-card">
+      <p id="stateIcon" class="text-3xl mb-3 text-slate-300"><i class="ti ti-file-search"></i></p>
+      <p id="stateTitle" class="text-lg font-extrabold text-ink"></p>
+      <p id="stateMsg" class="mt-1.5 text-sm text-slate-500 max-w-md mx-auto leading-relaxed"></p>
+      <div id="stateActions" class="mt-5 flex items-center justify-center gap-2"></div>
+    </div>
+
+    <div id="report" class="hidden"></div>
+  </main>
+
+  <div id="overlay" class="fixed inset-0 z-50 hidden" style="background:rgba(22,34,58,.55);backdrop-filter:blur(3px)">
+    <div class="min-h-full flex items-center justify-center p-5">
+      <div class="w-full max-w-md rounded-xl2 bg-white shadow-pop p-7">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="spin"></span>
+          <div>
+            <p class="font-extrabold text-ink text-[17px]">다시 검증하고 있어요</p>
+            <p class="text-xs text-slate-400">공식 자료와 대조하는 중입니다. 잠시만 기다려 주세요.</p>
+          </div>
+        </div>
+        <ol id="steps" class="space-y-3.5">
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-file-text text-[13px]"></i></span><span class="step__label text-sm text-slate-400">주장 분석</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-database-search text-[13px]"></i></span><span class="step__label text-sm text-slate-400">공식 자료 검색</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-scale text-[13px]"></i></span><span class="step__label text-sm text-slate-400">근거 입장 판단</span></li>
+          <li class="step flex items-center gap-3"><span class="step__mark"><i class="ti ti-calculator text-[13px]"></i></span><span class="step__label text-sm text-slate-400">신뢰도 산정</span></li>
+        </ol>
+        <div id="waitNotice" class="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] leading-relaxed text-amber-900">
+          <p class="flex items-start gap-1.5"><i class="ti ti-clock-hour-4 text-[14px] mt-px flex-none" aria-hidden="true"></i>
+            <span>검증에는 <b>최대 몇 분</b>이 걸릴 수 있어요.<span id="waitGuest"> <b>비회원은 이 화면을 벗어나면 검색 결과를 다시 확인할 수 없어요.</b> 결과를 저장하려면 <a href="/signup" class="font-bold underline hover:text-amber-950">회원가입</a>을 권장해요.</span></span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="border-t border-line py-8 mt-6">
+    <div class="mx-auto max-w-page px-5 text-xs text-slate-400 leading-relaxed">
+      본 결과는 공개된 공공데이터포털 API 및 정부 공식자료를 기준으로 합니다.
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const Y = window.Yaho;
+      Y.renderNav(null);
+      const $ = (id) => document.getElementById(id);
+      const id = new URLSearchParams(location.search).get("id");
+      let evLookup = {};
+
+      // 재시도: 결과 화면에서 같은 질문을 그 자리에서 재검증 (홈으로 튀지 않음)
+      const overlay = $("overlay");
+      const steps = [...document.querySelectorAll("#steps .step")];
+      if (Y.Auth.isLoggedIn) { const g = $("waitGuest"); if (g) g.remove(); }
+      let stepTimer = null, stepCur = 0;
+      function advanceSteps() {
+        steps.forEach((s) => s.classList.remove("is-active", "is-done"));
+        stepCur = 0;
+        const tick = () => {
+          steps.forEach((s, i) => { s.classList.toggle("is-done", i < stepCur); s.classList.toggle("is-active", i === stepCur); });
+          if (stepCur < steps.length - 1) { stepCur++; stepTimer = setTimeout(tick, 1700); }
+        };
+        tick();
+      }
+      async function retrySubmit(text) {
+        if (!text) return;
+        overlay.classList.remove("hidden");
+        advanceSteps();
+        try {
+          const res = await Y.apiJson("/api/v1/fact-checks", { method: "POST", body: JSON.stringify({ inputText: text }) });
+          let newId;
+          if (res && (res.verdict || res.claimResults)) { Y.Result.stash(res); newId = res.id; }
+          else if (res && res.analysisResultId) { newId = res.analysisResultId; }
+          if (!newId) throw new Error("결과를 받지 못했어요.");
+          steps.forEach((s) => s.classList.add("is-done"));
+          setTimeout(() => { location.href = `/result?id=${encodeURIComponent(newId)}`; }, 350);
+        } catch (err) {
+          clearTimeout(stepTimer);
+          overlay.classList.add("hidden");
+          const msg = (err.status === 401 || err.status === 403)
+            ? "검증 요청이 거부됐어요. 서버 접근 설정을 확인해 주세요."
+            : (err.message || "검증에 실패했어요. 잠시 후 다시 시도해 주세요.");
+          Y.toast(msg, true);
+        }
+      }
+
+      // 근거 카드의 "전문 보기" → 정제된 문서 전문을 모달로 표시
+      function openEvidenceModal(ev) {
+        const src = Y.EVIDENCE_SOURCE[ev.sourceType] || { label: ev.sourceType || "출처", official: false };
+        const title = `
+          <p class="text-[15px] font-extrabold text-ink leading-snug">${Y.esc(ev.sourceTitle) || "제목 없음"}</p>
+          <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] font-bold text-slate-500 bg-slate-100 rounded px-2 py-0.5">${Y.esc(src.label)}</span>
+            ${src.official ? Y.officialBadge() : ""}
+            ${Y.stanceChip(ev.stance)}
+            ${ev.publishedAt ? `<span class="text-[11px] text-slate-400 tnum">${Y.fmtDate(ev.publishedAt)}</span>` : ""}
+          </div>`;
+        const body = `
+          <div class="text-[13.5px] text-ink-2 leading-relaxed" style="white-space:pre-wrap;word-break:break-word">${Y.esc(ev.snippet) || "문서 본문이 없습니다."}</div>
+          ${ev.judgmentReason ? `<div class="mt-4 rounded-lg bg-slate-50 border border-line-2 px-3.5 py-2.5 text-[12.5px] text-slate-600 leading-relaxed"><b class="text-ink-2">판단</b> · ${Y.esc(ev.judgmentReason)}</div>` : ""}
+          ${Y.isHttpUrl(ev.sourceUrl) ? `<div class="mt-4"><a href="${Y.esc(ev.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm font-bold text-brand hover:underline">원문 페이지 열기 <i class="ti ti-external-link text-[13px]" aria-hidden="true"></i></a></div>` : ""}`;
+        Y.showModal({ title: title, bodyHtml: body });
+      }
+
+      // "관련도·유사도란?" → 지표 설명 모달
+      function openMetricInfoModal() {
+        const title = `<p class="text-[15px] font-extrabold text-ink">관련도 · 유사도란?</p>`;
+        const body = `
+          <div class="space-y-4 text-[13.5px] text-ink-2 leading-relaxed">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1"><span class="text-[12px] font-bold text-slate-500 bg-slate-100 rounded px-2 py-0.5">관련도</span><span class="text-[11px] text-slate-400">Relevance · 0~1</span></div>
+              <p>주장과 근거 문서가 <b>검색상 얼마나 관련 있는지</b>를 나타내요. 키워드 매칭과 랭킹(BM25 등)으로 계산되고, 값이 높을수록 주장과 직접 관련된 문서라는 뜻이에요.</p>
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5 mb-1"><span class="text-[12px] font-bold text-slate-500 bg-slate-100 rounded px-2 py-0.5">유사도</span><span class="text-[11px] text-slate-400">Similarity · 0~1</span></div>
+              <p>주장 문장과 근거 문서의 <b>의미가 얼마나 비슷한지</b>를 나타내요. 문장을 임베딩 벡터로 바꿔 의미적 유사도를 계산하기 때문에, 표현이 달라도 의미가 비슷하면 높게 나와요.</p>
+            </div>
+            <div class="rounded-lg bg-slate-50 border border-line-2 px-3.5 py-2.5 text-[12.5px] text-slate-600">
+              <b class="text-ink-2">한 줄 정리</b> · 관련도는 "검색으로 잘 걸렸나", 유사도는 "의미가 실제로 비슷한가"를 봐요.
+            </div>
+          </div>`;
+        Y.showModal({ title: title, bodyHtml: body });
+      }
+
+      $("report").addEventListener("click", (e) => {
+        const full = e.target.closest(".ev-full");
+        if (full) { const ev = evLookup[full.dataset.k]; if (ev) openEvidenceModal(ev); return; }
+        if (e.target.closest(".metric-info")) openMetricInfoModal();
+      });
+
+      const VERDICT_SUB = {
+        CONSISTENT: "공식 자료와 일치하는 것으로 판단됩니다.",
+        PARTIALLY_CONSISTENT: "공식 자료와 대체로 일치합니다.",
+        UNCERTAIN: "공식 자료만으로는 판단을 유보합니다.",
+        PARTIALLY_INCONSISTENT: "공식 자료와 부분적으로 일치하지 않습니다.",
+        INCONSISTENT: "공식 자료 기준 사실과 일치하지 않는 것으로 판단됩니다.",
+        INSUFFICIENT: "관련 공식 근거가 부족해 판단하기 어렵습니다.",
+        OUT_OF_SCOPE: "공식 자료로 검증할 수 있는 사실 주장이 없습니다.",
+      };
+
+      const btn = (href, label, primary) =>
+        `<a href="${href}" class="px-4 py-2.5 rounded-xl text-sm font-bold transition ${primary
+          ? "bg-brand text-white hover:bg-brand-700" : "bg-slate-100 text-ink hover:bg-slate-200"}">${label}</a>`;
+
+      function showState(icon, title, msg, actions) {
+        $("loading").classList.add("hidden");
+        $("report").classList.add("hidden");
+        $("stateIcon").innerHTML = `<i class="ti ${icon}"></i>`;
+        $("stateTitle").textContent = title;
+        $("stateMsg").textContent = msg || "";
+        $("stateActions").innerHTML = actions || "";
+        $("state").classList.remove("hidden");
+      }
+
+      if (!id) {
+        showState("ti-file-search", "결과를 찾을 수 없어요", "검증 결과 주소가 올바르지 않습니다. 새로 검증해 주세요.", btn("/", "새 검증하기", true));
+        return;
+      }
+
+      // 1) POST 응답 stash 우선 (비회원도 방금 만든 결과 렌더)
+      const stashed = Y.Result.take(id);
+      if (stashed) { route(stashed); return; }
+      // 2) 로그인 회원 → 기록 API 조회
+      if (Y.Auth.isLoggedIn) { load(); return; }
+      // 3) 비회원 + stash 없음 (새 탭/공유 링크) → 로그인 안내
+      showState("ti-lock", "이 결과는 저장 후 확인할 수 있어요",
+        "비회원이 방금 만든 결과는 이 페이지에서만 볼 수 있어요. 로그인하면 기록에 저장돼 언제든 다시 확인할 수 있습니다.",
+        btn(`/login?returnUrl=${encodeURIComponent("/history")}`, "로그인", true) + btn("/", "새 검증하기"));
+
+      function route(d) {
+        if (d && d.analysisStatus === "FAILED") {
+          showState("ti-alert-triangle", "분석에 실패했어요", "이 검증은 처리 중 오류로 완료되지 못했습니다. 새로 시도해 주세요.", btn("/", "다시 검증하기", true));
+        } else { render(d); }
+      }
+
+      async function load() {
+        try {
+          const data = await Y.apiJson(`/api/v1/results/histories/${encodeURIComponent(id)}`);
+          route(data);
+        } catch (err) {
+          if (err.status === 401 || err.status === 403) {
+            Y.Auth.clear();
+            showState("ti-lock", "로그인이 만료됐어요", "다시 로그인한 뒤 기록에서 확인해 주세요.",
+              btn(`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`, "로그인", true));
+            return;
+          }
+          if (err.status === 404) { showState("ti-file-search", "결과를 찾을 수 없어요", "이미 삭제되었거나 존재하지 않는 검증 결과입니다.", btn("/", "새 검증하기", true)); return; }
+          showState("ti-alert-triangle", "불러오지 못했어요", err.message || "잠시 후 다시 시도해 주세요.", btn("/", "돌아가기", true));
+        }
+      }
+
+      /* ------------------------------------------------------------ 렌더 */
+      function evidenceHtml(ev, ci, ei) {
+        const src = Y.EVIDENCE_SOURCE[ev.sourceType] || { label: ev.sourceType || "출처", official: false };
+        const st = Y.stanceInfo(ev.stance);
+        const rel = Y.metricText(ev.relevanceScore);
+        const sim = Y.metricText(ev.similarityScore);
+        return `<div class="rounded-xl border border-line bg-white p-3.5" style="border-left:3px solid ${st.tone}">
+          <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="text-[11px] font-bold text-slate-500 bg-slate-100 rounded px-2 py-0.5">${Y.esc(src.label)}</span>
+              ${src.official ? Y.officialBadge() : ""}
+            </span>
+            ${Y.stanceChip(ev.stance)}
+          </div>
+          <p class="text-[13px] font-bold text-ink leading-snug">${Y.esc(ev.sourceTitle) || "제목 없음"}</p>
+          ${ev.snippet ? `<p class="mt-1.5 text-[12.5px] text-slate-600 leading-relaxed clamp-4">${Y.esc(ev.snippet)}</p>` : ""}
+          ${ev.judgmentReason ? `<p class="mt-2 text-[12px] text-slate-500 bg-slate-50 border border-line-2 rounded-lg px-2.5 py-1.5 leading-relaxed"><b class="text-ink-2">판단</b> · ${Y.esc(ev.judgmentReason)}</p>` : ""}
+          <div class="mt-2.5 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+            ${rel ? `<span class="bg-slate-100 rounded px-1.5 py-0.5">관련도 <b class="text-slate-600 tnum">${rel}</b></span>` : ""}
+            ${sim ? `<span class="bg-slate-100 rounded px-1.5 py-0.5">유사도 <b class="text-slate-600 tnum">${sim}</b></span>` : ""}
+            ${(rel || sim) ? `<button type="button" class="metric-info inline-flex items-center gap-1 text-slate-400 hover:text-brand transition"><i class="ti ti-info-circle text-[13px]" aria-hidden="true"></i>관련도·유사도란?</button>` : ""}
+            ${ev.publishedAt ? `<span class="tnum">${Y.fmtDate(ev.publishedAt)}</span>` : ""}
+            <button type="button" class="ev-full ml-auto inline-flex items-center gap-1 font-bold text-brand hover:underline" data-k="${ci}-${ei}">전문 보기 <i class="ti ti-arrow-up-right text-[12px]" aria-hidden="true"></i></button>
+          </div>
+        </div>`;
+      }
+
+      function breakdownHtml(bd) {
+        if (!bd) return `<p class="text-[12.5px] text-slate-400">근거가 부족해 세부 점수가 산정되지 않았습니다.</p>`;
+
+        // 모든 항목을 0~100(높을수록 신뢰↑)로 통일. 일치도는 -1~1 → 0~100 환산, 모순 근거는 감점.
+        const rows = [
+          { key: "officialConsistencyScore", label: "공식자료 일치도", kind: "signed"  },
+          { key: "evidenceRelevanceScore",   label: "근거 관련도",     kind: "ratio"   },
+          { key: "evidenceSufficiencyScore", label: "근거 충분성",     kind: "ratio"   },
+          { key: "contradictionPenalty",     label: "모순 근거 감점",   kind: "penalty" },
+        ];
+
+        return rows.map(({ key, label, kind }) => {
+          const raw = bd[key];
+          const missing = raw == null || isNaN(raw);
+          let shown, valCls, active = true;
+
+          if (kind === "penalty") {
+            const p = missing ? 0 : Math.round(Number(raw) * 100);
+            active = p > 0;
+            shown = active ? `−${p}점` : "없음";
+            valCls = active ? "text-red-600 font-bold" : "text-slate-300";
+          } else if (kind === "signed") {           // -1~1 → 0~100 (0=완전 불일치, 50=중립, 100=완전 일치)
+            if (missing) { shown = "미산정"; valCls = "text-slate-300"; active = false; }
+            else {
+              const s = Math.max(-1, Math.min(1, Number(raw)));
+              const v = Math.round((s + 1) / 2 * 100);
+              shown = `${v} / 100`;
+              valCls = v <= 40 ? "text-red-600 font-bold" : "text-ink font-bold";
+            }
+          } else {                                  // ratio 0~1 → 0~100
+            if (missing) { shown = "미산정"; valCls = "text-slate-300"; active = false; }
+            else {
+              const v = Math.round(Number(raw) * 100);
+              active = v > 0;
+              shown = `${v} / 100`;
+              valCls = active ? "text-ink font-bold" : "text-slate-300";
+            }
+          }
+
+          return `<div class="flex items-center justify-between py-1.5" style="border-bottom:1px dashed #E7EDF3">
+            <span class="text-[12.5px] ${active ? "text-slate-600 font-medium" : "text-slate-300"}">${label}</span>
+            <span class="tnum text-[12.5px] ${valCls}">${shown}</span>
+          </div>`;
+        }).join("");
+      }
+
+      function claimHtml(claim, idx) {
+        const evs = claim.evidences || [];
+        const order = claim.displayOrder || idx + 1;
+        const evList = evs.length
+          ? evs.map((ev, i) => evidenceHtml(ev, idx, i)).join("")
+          : `<p class="text-[12.5px] text-slate-400 py-1">수집된 근거 문서가 없습니다.</p>`;
+        return `<section class="bg-white border border-line rounded-2xl p-5 mb-4 reveal">
+          <div class="flex items-start gap-3 mb-3.5">
+            <span class="grid place-items-center flex-none w-7 h-7 rounded-lg bg-ink text-white text-xs font-extrabold tnum">${order}</span>
+            <div>
+              <p class="text-[11.5px] font-bold text-slate-400 mb-0.5">소주장 ${order}</p>
+              <h3 class="text-[16px] font-bold text-ink leading-snug">${Y.esc(claim.claimText)}</h3>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 mb-4 flex-wrap">
+            ${Y.verdictChip(claim.verdict)}
+            ${Y.isUnscored(claim.verdict)
+              ? `<span class="text-[13px] font-semibold text-slate-400">점수 미산정</span>`
+              : `<span class="tnum text-[13px] font-bold text-slate-500">신뢰도 <span class="text-ink">${Y.scoreText(claim.finalScore)}</span> / 100</span>`}
+          </div>
+          ${claim.answerSummary ? `<p class="text-[14px] text-ink-2 leading-relaxed mb-1.5">${Y.esc(claim.answerSummary)}</p>` : ""}
+          ${claim.explanation ? `<p class="text-[13px] text-slate-500 leading-relaxed mb-4">${Y.esc(claim.explanation)}</p>` : `<div class="mb-4"></div>`}
+          <div class="grid gap-4 lg:grid-cols-[240px_1fr]">
+            <div class="rounded-xl border border-line-2 bg-slate-50/70 p-3.5">
+              <p class="text-[11.5px] font-bold text-slate-400 mb-2">점수 세부 항목</p>
+              ${breakdownHtml(claim.scoreBreakdown)}
+            </div>
+            <div>
+              <p class="text-[11.5px] font-bold text-slate-400 mb-2.5">공식 근거 ${evs.length}건</p>
+              <div class="space-y-2.5">${evList}</div>
+            </div>
+          </div>
+        </section>`;
+      }
+
+      function render(d) {
+        const info = Y.verdictInfo(d.verdict);
+        const claims = d.claimResults || [];
+
+        evLookup = {};
+        claims.forEach((c, ci) => (c.evidences || []).forEach((ev, ei) => { evLookup[ci + "-" + ei] = ev; }));
+
+        const header = `
+          <div class="flex items-center gap-2.5 bg-white border border-line rounded-xl px-4 py-3 mb-3.5 reveal">
+            <span class="text-[12px] font-bold text-slate-400 whitespace-nowrap">검증 대상</span>
+            <span class="text-[14px] text-slate-700 truncate flex-1">${Y.esc(d.questionSummary || d.originalInput)}</span>
+            <button type="button" id="retryBtn" class="flex-none inline-flex items-center gap-1 text-[12.5px] font-bold text-brand hover:text-brand-700 whitespace-nowrap"><i class="ti ti-refresh text-[13px]" aria-hidden="true"></i> 재시도</button>
+          </div>
+          <section class="bg-white border border-line rounded-2xl p-6 sm:p-7 shadow-card reveal">
+            <div class="flex items-center gap-4">
+              ${Y.verdictIconBadge(d.verdict, 60)}
+              <div>
+                <div class="text-[22px] font-extrabold" style="color:${info.tone}">${Y.esc(info.label)}</div>
+                <div class="text-[14px] text-slate-500 mt-0.5">${VERDICT_SUB[d.verdict] || "공식 자료 기준 판정입니다."}</div>
+              </div>
+            </div>
+            <div class="h-px bg-line-2 my-5"></div>
+            <div class="flex items-end justify-between gap-4 flex-wrap">
+              <div class="flex-1 min-w-[220px]">
+                ${Y.isUnscored(d.verdict)
+                  ? `<div class="rounded-xl border border-line bg-slate-50 px-4 py-3 text-sm text-slate-500">${
+                      d.verdict === "OUT_OF_SCOPE" ? "점수 미산정 · 검증 대상이 아닌 입력이에요." : "점수 미산정 · 공식 근거가 부족해 신뢰도를 매기지 않았어요."}</div>`
+                  : Y.scoreBarHtml(d.finalScore, d.verdict)}
+              </div>
+              <div class="text-[12.5px] text-slate-500 inline-flex items-center gap-1.5">
+                <i class="ti ti-calendar-event text-[15px] text-slate-400" aria-hidden="true"></i> 검증 시각 · ${Y.fmtDateTime(d.createdAt)}
+              </div>
+            </div>
+          </section>`;
+
+        const summary = (d.answerSummary || d.explanation) ? `
+          <section class="bg-white border border-line rounded-2xl p-5 sm:p-6 mt-3 reveal">
+            <div class="flex items-center gap-2 text-[13px] font-bold text-ink mb-2.5"><i class="ti ti-clipboard-text text-brand" aria-hidden="true"></i> 판단 요약</div>
+            ${d.answerSummary ? `<p class="text-[14.5px] text-ink-2 font-semibold leading-relaxed">${Y.esc(d.answerSummary)}</p>` : ""}
+            ${d.explanation ? `<p class="text-[13px] text-slate-500 leading-relaxed mt-2">${Y.esc(d.explanation)}</p>` : ""}
+            ${d.originalInput && d.originalInput !== d.questionSummary
+              ? `<p class="text-[12px] text-slate-400 mt-3 pt-3 border-t border-line-2">입력 원문 · ${Y.esc(d.originalInput)}</p>` : ""}
+          </section>` : "";
+
+        const claimsBlock = claims.length
+          ? `<div class="flex items-center gap-2 text-[14px] font-bold text-ink mt-8 mb-3"><i class="ti ti-list-details text-brand" aria-hidden="true"></i> 주장별 상세 <span class="text-[12px] font-semibold text-slate-400">${claims.length}건</span></div>`
+            + claims.map(claimHtml).join("")
+          : `<section class="bg-white border border-line rounded-2xl p-8 text-center mt-6 reveal">
+               <p class="text-3xl mb-2 text-slate-300"><i class="ti ti-compass"></i></p>
+               <p class="font-bold text-ink">검증 가능한 주장이 확인되지 않았어요</p>
+               <p class="text-sm text-slate-500 mt-1">입력에서 공식자료로 확인할 수 있는 사실 주장을 찾지 못했습니다.</p>
+             </section>`;
+
+        const guestNotice = !Y.Auth.isLoggedIn ? `
+          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-3.5 flex items-start gap-2 text-[13px] text-amber-900 reveal">
+            <i class="ti ti-alert-triangle text-[15px] mt-px flex-none" aria-hidden="true"></i>
+            <span>비회원은 이 결과가 <b>저장되지 않아요.</b> 이 화면을 벗어나면 다시 볼 수 없으니, 결과를 남기려면 <a href="/signup" class="font-bold underline hover:text-amber-950">회원가입</a>을 권장해요.</span>
+          </div>` : "";
+        const scopeNoteHtml = `
+          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mt-8 mb-1 flex items-start gap-2 text-[12.5px] text-amber-900 leading-relaxed break-keep reveal">
+            <i class="ti ti-info-circle text-[15px] mt-px flex-none" aria-hidden="true"></i>
+            <span class="space-y-0.5">
+              <span class="block">이 검증은 <b>외교부 공식 자료(공공데이터포털 API)</b>만을 근거로 해요.</span>
+              <span class="block">외교부 자료에 관련 내용이 없으면 실제로는 사실이어도 <b>'근거 부족'으로 나올 수 있고</b>, 여기서 확인됐다고 모든 맥락에서 사실임을 보장하진 않아요.</span>
+            </span>
+          </div>`;
+        $("report").innerHTML = guestNotice + header + summary + scopeNoteHtml + claimsBlock;
+        $("loading").classList.add("hidden");
+        $("state").classList.add("hidden");
+        $("report").classList.remove("hidden");
+
+        const rb = $("retryBtn");
+        if (rb) rb.addEventListener("click", () => retrySubmit(d.originalInput || d.questionSummary || ""));
+      }
+    });
+  </script>
+</body>
+</html>

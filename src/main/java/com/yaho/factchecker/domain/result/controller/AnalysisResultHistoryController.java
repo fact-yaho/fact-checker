@@ -3,6 +3,10 @@ package com.yaho.factchecker.domain.result.controller;
 import com.yaho.factchecker.domain.result.dto.AnalysisResultDetailResponse;
 import com.yaho.factchecker.domain.result.dto.AnalysisResultSummaryResponse;
 import com.yaho.factchecker.domain.result.service.AnalysisResultReadService;
+import com.yaho.factchecker.domain.result.service.AnalysisResultService;
+import com.yaho.factchecker.domain.user.entity.User;
+import com.yaho.factchecker.domain.user.repository.UserRepository;
+import com.yaho.factchecker.global.util.config.PrincipalDetails;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,16 +30,9 @@ import org.springframework.web.server.ResponseStatusException;
 public class AnalysisResultHistoryController {
 
     private final AnalysisResultReadService analysisResultReadService;
+    private final UserRepository userRepository;
+    private final AnalysisResultService analysisResultService;
 
-    /**
-     * 기록 탭 목록 조회
-     *
-     * 화면 예시:
-     * - 질문 요약
-     * - 신뢰도 점수
-     * - 판정
-     * - 생성 일시
-     */
     @GetMapping("/histories")
     public ResponseEntity<List<AnalysisResultSummaryResponse>> getMyResultHistories(
         @AuthenticationPrincipal Object principal,
@@ -52,12 +50,22 @@ public class AnalysisResultHistoryController {
         return ResponseEntity.ok(responses);
     }
 
-    /**
-     * 기록 탭 단건 상세 조회
-     *
-     * 목록에서 하나의 결과를 클릭했을 때 사용합니다.
-     * 결과 본문, 점수 상세, 근거 목록을 함께 반환합니다.
-     */
+    @DeleteMapping("/histories/{id}")
+    public ResponseEntity<Void> deleteMyResult(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        UUID userId = extractUserId(jwt);
+        try {
+            analysisResultService.deleteByUser(id, userId);
+            return ResponseEntity.noContent().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
     @GetMapping("/histories/{resultId}")
     public ResponseEntity<AnalysisResultDetailResponse> getMyResultDetail(
         @AuthenticationPrincipal Object principal,
@@ -72,33 +80,21 @@ public class AnalysisResultHistoryController {
     }
 
     private UUID extractUserId(Object principal) {
+        if (principal instanceof PrincipalDetails principalDetails) {
+            return principalDetails.getUser().getId();
+        }
         if (principal instanceof Jwt jwt) {
-            String userId = jwt.getClaimAsString("user_id");
-
-            if (userId == null || userId.isBlank()) {
-                userId = jwt.getClaimAsString("service_user_id");
+            String email = jwt.getClaimAsString("email");
+            if (email == null || email.isBlank()) {
+                email = jwt.getClaimAsString("preferred_username");
             }
-
-            if (userId == null || userId.isBlank()) {
-                throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "토큰 내 사용자 ID 정보가 유효하지 않습니다."
-                );
-            }
-
-            try {
-                return UUID.fromString(userId);
-            } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "토큰 내 사용자 ID 형식이 올바르지 않습니다."
-                );
+            if (email != null && !email.isBlank()) {
+                return userRepository.findByEmail(email)
+                        .map(User::getId)
+                        .orElseThrow(() -> new ResponseStatusException(
+                                HttpStatus.UNAUTHORIZED, "존재하지 않는 회원입니다."));
             }
         }
-
-        throw new ResponseStatusException(
-            HttpStatus.UNAUTHORIZED,
-            "인증 정보가 올바르지 않습니다."
-        );
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
     }
 }

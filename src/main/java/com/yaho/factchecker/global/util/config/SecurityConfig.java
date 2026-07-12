@@ -20,7 +20,7 @@ public class SecurityConfig {
     @Autowired
     private CustomOAuth2UserService customOAuth2UserService;
 
-    // 🎯 순환 참조 방지를 위해 ApplicationContext를 동적으로 활용합니다.
+    // 순환 참조 방지를 위해 ApplicationContext를 동적으로 활용합니다.
     @Autowired
     private ApplicationContext applicationContext;
 
@@ -36,12 +36,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // 🔧 변경: JWT 스테이트리스 REST라 /api/** 전체를 CSRF 예외로.
+                //         (login·send-verification·verify-code·DELETE users가 빠져 있던 문제 해결)
                 .csrf(csrf -> csrf
                         .ignoringRequestMatchers(
-                                "/api/v1/users/signup",
-                                "/api/v1/users/check-email",
-                                "/api/v1/users/check-nickname",
-                                "/api/v1/fact-checks",
+                                "/api/**",
                                 "/oauth2/**",
                                 "/login/oauth2/**"
                         )
@@ -54,7 +53,22 @@ public class SecurityConfig {
                 )
                 // URL별 권한 설정
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/signup", "/api/v1/auth/login", "/api/v1/users/signup", "/mypage").permitAll()
+                        .requestMatchers(
+                                // ── 뷰 페이지 (껍데기 public, 데이터는 JS가 Bearer로 fetch) ──
+                                "/", "/login", "/signup", "/mypage",
+                                "/result", "/history",
+                                // ── 인증 없이 호출되는 API ──
+                                "/api/v1/auth/login",
+                                "/api/v1/users/signup",
+                                "/api/v1/users/check-email",
+                                "/api/v1/users/check-nickname",
+                                "/api/v1/users/send-verification",
+                                "/api/v1/users/verify-code",
+                                "/api/v1/fact-checks",
+                                "/api/v1/users/reset-password",
+                                "/reset-password"
+                        ).permitAll()
+                        // 나머지(=results/histories/**, users/me, DELETE users 등)는 로그인 필요
                         .anyRequest().authenticated()
                 )
                 // 일반 폼 로그인 설정

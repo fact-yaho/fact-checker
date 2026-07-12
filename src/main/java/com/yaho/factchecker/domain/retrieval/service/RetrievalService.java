@@ -99,7 +99,7 @@ public class RetrievalService {
 
         Map<UUID, EvidenceDocument> candidateMap = collectCandidateMap(claimId, vectorResults);
 
-        List<RerankRow> rerankRows = rerank(request.canonicalClaim(), candidateMap, vectorResults);
+        List<RerankRow> rerankRows = rerank(request, candidateMap, vectorResults);
 
         // [5단계] 재정렬 결과 저장 (연도 범위 포함 — 캐시 키)
         saveRerankResults(claimId, rerankRows, candidateMap, request.fromYear(), request.toYear());
@@ -169,7 +169,6 @@ public class RetrievalService {
         documentCollector.collectAndSave(request);
     }
 
-
     // [4-1단계] 후보 문서 맵 수집 (per-claim + 코퍼스)
     private Map<UUID, EvidenceDocument> collectCandidateMap(UUID claimId, List<VectorResult> vectorResults) {
         Map<UUID, EvidenceDocument> candidateMap = new LinkedHashMap<>();
@@ -195,7 +194,7 @@ public class RetrievalService {
     }
 
     // [4-2~4단계] BM25 + RRF
-    private List<RerankRow> rerank(String claimText,
+    private List<RerankRow> rerank(ClaimRetrievalRequest request,
                                    Map<UUID, EvidenceDocument> candidateMap,
                                    List<VectorResult> vectorResults) {
         if (candidateMap.isEmpty()) {
@@ -204,8 +203,46 @@ public class RetrievalService {
         }
 
         List<EvidenceDocument> candidates = new ArrayList<>(candidateMap.values());
-        List<Bm25Result> bm25Results = bm25Scorer.score(claimText, candidates);
+
+        // 소주장에서 추출된 국가명을 BM25 부스트 항으로 전달
+        // (BM25가 공통 어휘만으로 무관한 국가 문서를 상위에 올리는 것을 방지)
+        List<String> countryNames = toCountryNames(request);
+
+        List<Bm25Result> bm25Results =
+                bm25Scorer.score(request.canonicalClaim(), countryNames, candidates);
+
         return rrfFusion.fuse(bm25Results, vectorResults);
+    }
+
+    // 소주장의 국가 목록에서 BM25 부스트에 쓸 국가명만 추출
+    // BM25 부스트에 쓸 국가명 (자국 제외 — 모든 문서에 등장하여 변별력이 없음)
+    private List<String> toCountryNames(ClaimRetrievalRequest request) {
+        if (request.countries() == null) {
+            return List.of();
+        }
+        return request.countries().stream()
+                .filter(c -> !isHomeCountry(c))
+                .map(ClaimRetrievalRequest.CountryInfo::name)
+                .filter(n -> n != null && !n.isBlank())
+                .toList();
+    }
+
+    /**
+     * 자국(대한민국) 여부
+     * 외교 팩트체크 특성상 소주장의 주체는 대부분 한국이며,
+     * "대한민국/한국"은 거의 모든 외교부 문서에 등장하므로 부스팅해도 변별력이 없고
+     * 오히려 무관한 문서까지 함께 끌어올림
+     */
+    private boolean isHomeCountry(ClaimRetrievalRequest.CountryInfo country) {
+        if (country == null) {
+            return false;
+        }
+        if ("KOR".equalsIgnoreCase(country.code())) {
+            return true;
+        }
+        String name = country.name();
+        return name != null
+                && (name.contains("대한민국") || name.contains("한국"));
     }
 
     // [5단계] 재정렬 결과 저장 (기존 내역 덮어쓰기) + 연도 범위(캐시 키) 저장

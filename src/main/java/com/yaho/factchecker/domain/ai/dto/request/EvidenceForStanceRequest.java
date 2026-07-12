@@ -1,12 +1,11 @@
 package com.yaho.factchecker.domain.ai.dto.request;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 public record EvidenceForStanceRequest(
-        UUID evidenceDocumentId, // 준기님이 관리하는 근거자료 ID
-        String title, // 근거자료 제목
-        String content, // LLM이 읽을 내용
-        LocalDate publishedAt // 근거자료 발행일
+        int idx,              // LLM이 참조할 짧은 번호 (1부터). UUID는 LLM에 노출하지 않음
+        String title,
+        String content,
+        LocalDate publishedAt
 ) {
 }

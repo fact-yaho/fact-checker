@@ -38,13 +38,21 @@ public class UserController {
             UUID userId = userService.signUp(request);
             log.info("✅ 회원가입 성공: {}", userId);
             return ResponseEntity.ok("회원가입 완료. 유저 ID: " + userId);
+
         } catch (IllegalArgumentException e) {
-            log.error("⚠️ 잘못된 요청: {}", e.getMessage());
+            // 의도된 검증 문구("이미 사용 중인 이메일입니다." 등) → 그대로 보여줘도 됩니다.
+            log.warn("⚠️ 잘못된 요청: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
+
         } catch (RuntimeException e) {
+            // 🔒 [보안] 내부 예외 원문을 사용자에게 노출하지 않습니다.
+            //    예전에는 여기서 e.getMessage() 를 그대로 내려주는 바람에
+            //    "Keycloak 사용자 생성 실패 (상태코드: 409): {"errorMessage":"User exists..."}" 처럼
+            //    인증 서버 종류 · 상태코드 · 원문 응답이 화면에 그대로 새어 나갔습니다.
+            //    상세 원인은 로그에만 남깁니다.
             log.error("❌ 회원가입 중 오류 발생: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("회원가입 실패: " + e.getMessage());
+                    .body("회원가입에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
     }
 
@@ -98,12 +106,18 @@ public class UserController {
             return ResponseEntity.badRequest().body("이메일 값이 비어있습니다.");
         }
 
+        // 🆕 회원가입 / 비밀번호 재설정이 같은 API 를 재사용하므로 용도를 받아 메일 문구를 분기합니다.
+        //    미전송 시 "signup" 으로 기본 동작 → 기존 요청 그대로 유효(하위 호환).
+        String purpose = request.getOrDefault("purpose", "signup"); // "signup" | "reset"
+
         try {
-            emailService.sendVerificationEmail(email);
+            emailService.sendVerificationEmail(email, purpose);
             return ResponseEntity.ok("네이버 메일로 인증 코드가 발송되었습니다. 메일함을 확인하세요!");
         } catch (Exception e) {
+            // 🔒 [보안] SMTP 계정 · 서버 주소 등 내부 정보가 담긴 원문을 노출하지 않습니다.
             log.error("이메일 인증 코드 발송 중 서버 에러 발생: ", e);
-            return ResponseEntity.internalServerError().body("메일 발송 중 오류가 발생했습니다: " + e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body("메일 발송에 실패했어요. 잠시 후 다시 시도해 주세요.");
         }
     }
 
@@ -123,6 +137,41 @@ public class UserController {
             return ResponseEntity.ok("이메일 인증에 성공했습니다.");
         }
         return ResponseEntity.badRequest().body("인증 코드가 올바르지 않거나 만료되었습니다.");
+    }
+
+    // 🆕 비밀번호 재설정 API
+    //    프론트(reset-password.html)는 [인증코드 발송] → [새 비밀번호 + 코드 제출] 2단계로 동작합니다.
+    //    verifyCode() 는 성공 시 코드를 소모(remove)하므로, 중간에 따로 검증하지 않고 여기서 1회만 검증합니다.
+    @PostMapping("/reset-password")
+    public ResponseEntity<String> resetPassword(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        String code = request.get("code");
+        String newPassword = request.get("newPassword");
+
+        if (email == null || email.isBlank()
+                || code == null || code.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body("이메일, 인증 코드, 새 비밀번호를 모두 입력해 주세요.");
+        }
+
+        // 인증 코드 검증 (성공 시 코드 소모)
+        if (!emailService.verifyCode(email, code)) {
+            return ResponseEntity.badRequest().body("인증 코드가 올바르지 않거나 만료되었습니다.");
+        }
+
+        try {
+            userService.resetPassword(email, newPassword);
+            return ResponseEntity.ok("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
+
+        } catch (IllegalArgumentException e) {
+            log.warn("⚠️ 비밀번호 재설정 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+
+        } catch (Exception e) {
+            log.error("❌ 비밀번호 재설정 중 오류 발생: {}", e.getMessage(), e); // 원문은 로그에만
+            return ResponseEntity.internalServerError()
+                    .body("비밀번호 재설정에 실패했어요. 잠시 후 다시 시도해 주세요.");
+        }
     }
 
     // 5. 내 정보 조회 API (/me)

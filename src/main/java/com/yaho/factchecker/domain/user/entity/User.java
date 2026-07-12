@@ -13,15 +13,15 @@ import java.util.UUID;
 @Table(name= "p_user")
 @Getter
 @NoArgsConstructor
-@AllArgsConstructor //
-@Builder //
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id
     @GeneratedValue
     private UUID id;
 
-    @Column(nullable = false, unique = true ,length = 50 ) //중복 가입방지
+    @Column(nullable = false, unique = true ,length = 50 )
     private String email;
 
     @Column(nullable = false, length = 255 )
@@ -45,9 +45,10 @@ public class User {
         this.name = name;
         this.role = role;
         this.nickname = nickname;
+    }
 
-
-
+    public void updatePassword(String encodedPassword) {
+        this.password = encodedPassword;
     }
 
 
